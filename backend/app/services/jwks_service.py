@@ -30,7 +30,7 @@ _FETCH_TIMEOUT_SECONDS = 5.0
 
 
 def _fetch_jwks(supabase_url: str) -> List[Dict[str, Any]]:
-    jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/jwks"
+    jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
     response = httpx.get(jwks_url, timeout=_FETCH_TIMEOUT_SECONDS)
     response.raise_for_status()
     return response.json().get("keys", [])
