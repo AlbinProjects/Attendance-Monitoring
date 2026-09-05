@@ -174,39 +174,56 @@ def get_missing_dates(
     lookback_days: int = DEFAULT_MISSING_LOOKBACK_DAYS,
 ) -> List[Dict[str, Any]]:
     """
-    Past dates (strictly before today) with no submitted performance
-    report, within a lookback window — this powers the post-login "missing
-    performance" warning (README section 26-27). Never looks further back
-    than the employee's joining_date, and never includes today (today
-    isn't "missing" until it becomes yesterday).
-    """
-    today = get_office_today(settings)
-    earliest = today - timedelta(days=lookback_days)
-    if joining_date and joining_date > earliest:
-        earliest = joining_date
+    Employee-facing missing performance dates.
 
-    if earliest >= today:
-        return []
+    Rules:
+      - Only yesterday can appear as a missing past performance.
+      - Today appears only after the 5 PM performance window opens.
+      - Older historical dates are not shown to employees.
+      - joining_date is respected.
+    """
+    now = get_office_now(settings)
+    today = now.date()
+    yesterday = today - timedelta(days=1)
 
     client = get_service_client()
+
     result = (
         client.table("performance_updates")
         .select("work_date, submitted_at")
         .eq("employee_id", employee_id)
-        .gte("work_date", earliest.isoformat())
-        .lt("work_date", today.isoformat())
+        .in_("work_date", [yesterday.isoformat(), today.isoformat()])
         .execute()
     )
+
     submitted_dates = {
-        row["work_date"] for row in (result.data or []) if row.get("submitted_at")
+        row["work_date"]
+        for row in (result.data or [])
+        if row.get("submitted_at")
     }
 
     missing = []
-    d = earliest
-    while d < today:
-        if d.isoformat() not in submitted_dates:
-            missing.append({"work_date": d.isoformat(), "status": "missing"})
-        d += timedelta(days=1)
+
+    # Yesterday
+    if (
+        (not joining_date or yesterday >= joining_date)
+        and yesterday.isoformat() not in submitted_dates
+    ):
+        missing.append({
+            "work_date": yesterday.isoformat(),
+            "status": "missing",
+        })
+
+    # Today — only after 5 PM
+    if (
+        is_performance_available(settings, at=now)
+        and today.isoformat() not in submitted_dates
+    ):
+        missing.append({
+            "work_date": today.isoformat(),
+            "status": "missing",
+        })
+
     return missing
 
 
