@@ -44,11 +44,13 @@ async def submit(
 
 
 @router.get("/history")
-async def get_history(employee: dict = Depends(get_current_employee), days: int = 30):
-    """Most-recent-first performance history, including synthesized
-    "missing" entries for past dates with no submission."""
+async def get_history(employee: dict = Depends(get_current_employee)):
+    """Performance history from September 1, 2026 onward."""
     settings = get_settings()
-    return performance_service.get_history(employee["id"], settings, days=days)
+    return performance_service.get_history(
+        employee["id"],
+        settings,
+    )
 
 
 @router.get("/missing")
