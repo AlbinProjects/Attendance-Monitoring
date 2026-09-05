@@ -46,6 +46,9 @@ def get_performance_for_date(employee_id: str, work_date: date) -> Optional[Dict
         .maybe_single()
         .execute()
     )
+    if result is None:
+       return None
+    
     return result.data
 
 
