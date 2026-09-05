@@ -87,6 +87,9 @@ def get_attendance_for_date(employee_id: str, attendance_date: date) -> Optional
         .maybe_single()
         .execute()
     )
+    if result is None:
+        return None
+
     return result.data
 
 
