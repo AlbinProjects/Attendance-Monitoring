@@ -36,6 +36,7 @@ def ping(employee_id: str, settings: Settings) -> None:
 
 def get_presence(employee_id: str) -> Optional[Dict[str, Any]]:
     client = get_service_client()
+
     result = (
         client.table("laptop_presence")
         .select("*")
@@ -43,6 +44,10 @@ def get_presence(employee_id: str) -> Optional[Dict[str, Any]]:
         .maybe_single()
         .execute()
     )
+
+    if result is None:
+        return None
+
     return result.data
 
 
