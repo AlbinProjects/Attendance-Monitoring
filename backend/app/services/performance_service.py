@@ -23,7 +23,7 @@ from app.services.supabase_client import get_service_client
 from app.services.time_service import get_office_now, get_office_today, localize_time_on_date
 
 DEFAULT_MISSING_LOOKBACK_DAYS = 14
-DEFAULT_HISTORY_DAYS = 30
+HISTORY_START_DATE = date(2026, 9, 1)
 
 
 def is_performance_available(settings: Settings, at=None) -> bool:
@@ -227,17 +227,27 @@ def get_missing_dates(
     return missing
 
 
-def get_history(employee_id: str, settings: Settings, days: int = DEFAULT_HISTORY_DAYS) -> List[Dict[str, Any]]:
+def get_history(
+    employee_id: str,
+    settings: Settings,
+) -> List[Dict[str, Any]]:
     """
-    Most-recent-first performance history for the last `days` calendar
-    days, synthesizing "missing" (past, unsubmitted) and "available"/
-    "not_available" (today, unsubmitted) entries for dates with no row —
-    so the employee sees a complete calendar picture, not just their own
-    submissions (see README section 30 example, which shows a MISSING row
-    even though nothing was ever submitted for that date).
+    Employee performance history from September 1, 2026 onward.
+
+    History is grouped by month in the frontend.
+
+    The current day is included, but its status depends on the 5 PM
+    performance availability rule.
+
+    Older missing dates are shown in history as missing, but they are
+    NOT self-service editable. The missing-performance warning endpoint
+    separately controls which dates require employee action.
     """
     today = get_office_today(settings)
-    start = today - timedelta(days=days - 1)
+    start = HISTORY_START_DATE
+
+    if start > today:
+        start = today
 
     client = get_service_client()
     result = (
@@ -248,18 +258,42 @@ def get_history(employee_id: str, settings: Settings, days: int = DEFAULT_HISTOR
         .lte("work_date", today.isoformat())
         .execute()
     )
-    rows_by_date = {r["work_date"]: r for r in (result.data or [])}
+
+    rows_by_date = {
+        row["work_date"]: row
+        for row in (result.data or [])
+    }
 
     history = []
+
     d = today
+
     while d >= start:
         key = d.isoformat()
+
         if key in rows_by_date:
             history.append(rows_by_date[key])
+
         elif d == today:
-            status_val = "available" if is_performance_available(settings) else "not_available"
-            history.append({"work_date": key, "status": status_val, "submitted_at": None})
+            status_val = (
+                "available"
+                if is_performance_available(settings)
+                else "not_available"
+            )
+
+            history.append({
+                "work_date": key,
+                "status": status_val,
+                "submitted_at": None,
+            })
+
         else:
-            history.append({"work_date": key, "status": "missing", "submitted_at": None})
+            history.append({
+                "work_date": key,
+                "status": "missing",
+                "submitted_at": None,
+            })
+
         d -= timedelta(days=1)
+
     return history
