@@ -79,8 +79,9 @@ async def check_out(
 
 @router.get("/history")
 async def get_history(employee: dict = Depends(get_current_employee)):
-    """Full attendance history for the calling employee, most recent
-    first. Employees can only ever see their own — enforced both by this
-    query being scoped to employee["id"] (derived from the authenticated
-    session, never a request parameter) and by RLS as a second layer."""
-    return attendance_service.get_attendance_history(employee["id"])
+    """Attendance history for the calling employee."""
+    settings = get_settings()
+    return attendance_service.get_attendance_history(
+        employee["id"],
+        settings,
+    )
