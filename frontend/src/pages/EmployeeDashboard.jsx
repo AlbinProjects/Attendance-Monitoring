@@ -45,7 +45,20 @@ export default function EmployeeDashboard() {
     setToday(todayRes.data);
     setPerformanceToday(perfRes.data);
     setMissing(missingRes.data);
-    setMonthly(computeMonthlySummary(historyRes.data));
+    const currentMonth = new Date();
+    const currentYear = currentMonth.getFullYear();
+    const currentMonthNumber = String(
+      currentMonth.getMonth() + 1
+    ).padStart(2, "0");
+
+    const currentMonthHistory = historyRes.data.filter((row) => {
+     const date = row.attendance_date || "";
+     return date.startsWith(
+       `${currentYear}-${currentMonthNumber}-`
+     );
+    });
+    
+    setMonthly(computeMonthlySummary(currentMonthHistory));
   }, []);
 
   useEffect(() => {
