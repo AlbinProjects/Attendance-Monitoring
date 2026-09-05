@@ -93,15 +93,30 @@ def get_attendance_for_date(employee_id: str, attendance_date: date) -> Optional
     return result.data
 
 
-def get_attendance_history(employee_id: str) -> list:
+HISTORY_START_DATE = date(2026, 9, 1)
+
+
+def get_attendance_history(employee_id: str, settings: Settings) -> list:
+    today = get_office_today(settings)
+
+    # Never return anything before the application's history start date.
+    start_date = HISTORY_START_DATE
+
+    # Safety in case this function is somehow called before Sep 1, 2026.
+    if start_date > today:
+        start_date = today
+
     client = get_service_client()
     result = (
         client.table("attendance")
         .select("*")
         .eq("employee_id", employee_id)
+        .gte("attendance_date", start_date.isoformat())
+        .lte("attendance_date", today.isoformat())
         .order("attendance_date", desc=True)
         .execute()
     )
+
     return result.data or []
 
 
