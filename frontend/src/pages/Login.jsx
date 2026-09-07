@@ -17,14 +17,14 @@ export default function Login() {
   // the user.
   useEffect(() => {
     if (loading || !isAuthenticated || !employee) return;
-    const from = location.state?.from?.pathname;
-    if (from && from !== "/login") {
-      navigate(from, { replace: true });
-      return;
-    }
-    navigate(employee.role === "employee" ? "/employee/dashboard" : "/admin/dashboard", {
-      replace: true,
-    });
+    // Always route by the authenticated backend profile role.
+    // Never honor a previously requested employee route here: a super_admin
+    // must always land on the admin dashboard and must never enter the
+    // employee check-in UI.
+    const destination = employee.role === "employee"
+      ? "/employee/dashboard"
+      : "/admin/dashboard";
+    navigate(destination, { replace: true });
   }, [loading, isAuthenticated, employee, navigate, location.state]);
 
   async function handleSubmit(e) {
