@@ -24,16 +24,44 @@ from typing import Any, Dict, List, Optional
 from app.services.supabase_client import get_service_client
 
 VALID_ACTIONS = {
+    # Attendance
     "CHECK_IN",
     "CHECK_OUT",
     "ADMIN_ATTENDANCE_CREATED",
     "ADMIN_ATTENDANCE_UPDATED",
     "ADMIN_ATTENDANCE_DELETED",
+    "ATTENDANCE_CORRECTED",
+
+    # Employee Management
     "EMPLOYEE_CREATED",
     "EMPLOYEE_UPDATED",
     "EMPLOYEE_ROLE_CHANGED",
     "EMPLOYEE_DISABLED",
+    "EMPLOYEE_PASSWORD_RESET",
+
+    # Company Settings
     "COMPANY_SETTINGS_UPDATED",
+
+    # Calendar
+    "COMPANY_CALENDAR_CREATED",
+    "COMPANY_CALENDAR_UPDATED",
+    "COMPANY_CALENDAR_DELETED",
+
+    # Leave
+    "LEAVE_CREATED",
+    "LEAVE_APPROVED",
+    "LEAVE_REJECTED",
+    "LEAVE_UPDATED",
+    "LEAVE_CANCELLED",
+
+    # Work Modes
+    "WORK_FROM_HOME_ASSIGNED",
+    "WORK_FROM_SITE_ASSIGNED",
+    "ON_DUTY_ASSIGNED",
+    "ON_DUTY_UPDATED",
+
+    # Messages
+    "EMPLOYEE_MESSAGE_SENT",
 }
 
 
