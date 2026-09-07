@@ -8,8 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.dependencies import get_current_employee, require_role
-from app.services import calendar_service, network_service
-from app.config import get_settings
+from app.services import calendar_service
 
 
 router = APIRouter()
@@ -23,12 +22,7 @@ router = APIRouter()
 async def get_today_calendar(
     employee: dict = Depends(get_current_employee),
 ):
-    settings = get_settings()
-    today = date.today()
-
-    # Business calendar itself uses dates, so no client-provided date
-    # is involved here.
-    return calendar_service.get_day_status(today)
+    return calendar_service.get_day_status(date.today())
 
 
 @router.get("/month")
