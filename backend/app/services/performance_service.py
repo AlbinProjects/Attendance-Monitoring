@@ -21,6 +21,7 @@ from fastapi import HTTPException, status
 from app.config import Settings
 from app.services.supabase_client import get_service_client
 from app.services.time_service import get_office_now, get_office_today, localize_time_on_date
+from app.services import calendar_service
 
 DEFAULT_MISSING_LOOKBACK_DAYS = 14
 HISTORY_START_DATE = date(2026, 9, 1)
@@ -202,29 +203,31 @@ def get_missing_dates(
         if row.get("submitted_at")
     }
 
-    missing = []
+missing = []
 
-    # Yesterday
-    if (
-        (not joining_date or yesterday >= joining_date)
-        and yesterday.isoformat() not in submitted_dates
-    ):
-        missing.append({
-            "work_date": yesterday.isoformat(),
-            "status": "missing",
-        })
+# Yesterday
+if (
+    (not joining_date or yesterday >= joining_date)
+    and calendar_service.is_working_day(yesterday)
+    and yesterday.isoformat() not in submitted_dates
+):
+    missing.append({
+        "work_date": yesterday.isoformat(),
+        "status": "missing",
+    })
 
-    # Today — only after 5 PM
-    if (
-        is_performance_available(settings, at=now)
-        and today.isoformat() not in submitted_dates
-    ):
-        missing.append({
-            "work_date": today.isoformat(),
-            "status": "missing",
-        })
+# Today — only after 5 PM and only if today is a working day
+if (
+    is_performance_available(settings, at=now)
+    and calendar_service.is_working_day(today)
+    and today.isoformat() not in submitted_dates
+):
+    missing.append({
+        "work_date": today.isoformat(),
+        "status": "missing",
+    })
 
-    return missing
+return missing
 
 
 def get_history(
@@ -287,7 +290,7 @@ def get_history(
                 "submitted_at": None,
             })
 
-        else:
+        elif calendar_service.is_working_day(d):
             history.append({
                 "work_date": key,
                 "status": "missing",
