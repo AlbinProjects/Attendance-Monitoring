@@ -21,10 +21,23 @@ def get_calendar_date(calendar_date: date) -> Optional[Dict[str, Any]]:
 
 
 def get_day_status(calendar_date: date) -> Dict[str, Any]:
+    """Return the company working-day status for one date.
+
+    Defaults: Monday-Saturday are working days; Sunday is non-working.
+    Admin/Super Admin can explicitly override a Sunday to working by saving
+    that date with day_type='sunday' and is_working_day=True. Holidays and
+    other non-working dates are also explicitly stored in the calendar.
+    """
     row = get_calendar_date(calendar_date)
     if not row:
-        return {"calendar_date": calendar_date.isoformat(), "day_type": "working_day",
-                "is_working_day": True, "name": None, "explicit": False}
+        is_sunday = calendar_date.weekday() == 6
+        return {
+            "calendar_date": calendar_date.isoformat(),
+            "day_type": "sunday" if is_sunday else "working_day",
+            "is_working_day": not is_sunday,
+            "name": None,
+            "explicit": False,
+        }
     return {"calendar_date": calendar_date.isoformat(), "day_type": row["day_type"],
             "is_working_day": row["is_working_day"], "name": row.get("name"), "explicit": True,
             "created_by": row.get("created_by"), "created_at": row.get("created_at"),
@@ -48,10 +61,7 @@ def get_month_calendar(year: int, month: int) -> List[Dict[str, Any]]:
     for day in range(1, monthrange(year, month)[1] + 1):
         d = date(year, month, day)
         row = by_date.get(d.isoformat())
-        out.append(get_day_status(d) if row else {
-            "calendar_date": d.isoformat(), "day_type": "working_day",
-            "is_working_day": True, "name": None, "explicit": False
-        })
+        out.append(get_day_status(d))
     return out
 
 
