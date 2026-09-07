@@ -1,0 +1,14 @@
+{
+  "tests/test_activity.py": true,
+  "tests/test_admin.py": true,
+  "tests/test_attendance.py": true,
+  "tests/test_audit.py": true,
+  "tests/test_auth.py": true,
+  "tests/test_company_config_service.py": true,
+  "tests/test_employees.py": true,
+  "tests/test_laptop_presence_service.py": true,
+  "tests/test_network_service.py": true,
+  "tests/test_performance.py": true,
+  "tests/test_reports.py": true,
+  "tests/test_security_review.py": true
+}
