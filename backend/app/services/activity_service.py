@@ -49,15 +49,27 @@ def _parse(ts: str) -> datetime:
 # -----------------------------------------------------------------------
 
 def get_heartbeat_row(attendance_id: str) -> Optional[Dict[str, Any]]:
+    """Return the latest heartbeat row, or None when no heartbeat exists.
+
+    Do not rely on ``maybe_single()`` here. With some supabase-py/client
+    combinations, a zero-row maybe-single query can produce a None response
+    object, which makes ``result.data`` raise AttributeError. A heartbeat is
+    optional, especially immediately after check-in, so a missing row must
+    simply be treated as no activity recorded yet.
+    """
     client = get_service_client()
     result = (
         client.table("activity_heartbeats")
         .select("*")
         .eq("attendance_id", attendance_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
-    return result.data
+
+    if not result or not result.data:
+        return None
+
+    return result.data[0]
 
 
 def upsert_heartbeat(attendance_id: str, employee_id: str, last_heartbeat_at: datetime) -> None:
@@ -107,7 +119,7 @@ def get_periods_for_attendance(attendance_id: str) -> List[Dict[str, Any]]:
         .eq("attendance_id", attendance_id)
         .execute()
     )
-    return result.data or []
+    return (result.data if result else None) or []
 
 
 # -----------------------------------------------------------------------
