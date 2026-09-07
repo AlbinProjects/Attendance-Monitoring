@@ -30,7 +30,11 @@ export default function ProtectedRoute({ allowedRoles, children }) {
   }
 
   if (allowedRoles && !allowedRoles.includes(employee.role)) {
-    const fallback = employee.role === "employee" ? "/employee/dashboard" : "/admin/dashboard";
+    // Role is authoritative from the backend profile. Super admins and admins
+    // must never be allowed to fall into the employee UI/check-in flow.
+    const fallback = employee.role === "employee"
+      ? "/employee/dashboard"
+      : "/admin/dashboard";
     return <Navigate to={fallback} replace />;
   }
 
