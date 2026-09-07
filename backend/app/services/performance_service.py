@@ -298,5 +298,4 @@ def get_history(
             })
 
         d -= timedelta(days=1)
-
-    return history
+return history
