@@ -235,7 +235,18 @@ def get_activity_summary_for_attendance(attendance: Optional[Dict[str, Any]], se
     attendance_id = attendance["id"]
     check_in_dt = _parse(attendance["check_in"])
     now = get_office_now(settings)
-    end_dt = _parse(attendance["check_out"]) if attendance.get("check_out") else now
+    if attendance.get("check_out"):
+        end_dt = _parse(attendance["check_out"])
+    else:
+        # An attendance record belongs to one office-calendar date. Never
+        # let an open session leak into the following day and inflate
+        # inactivity/active time (for example, a Sep 7 check-in viewed on
+        # Sep 8 must not become a 24+ hour session). The employee/admin
+        # should still be shown as checked in until the record is closed,
+        # but activity accounting for that attendance date stops at local
+        # midnight.
+        next_day = check_in_dt.date() + __import__("datetime").timedelta(days=1)
+        end_dt = min(now, datetime.combine(next_day, datetime.min.time(), tzinfo=check_in_dt.tzinfo))
     total_seconds = max(0.0, (end_dt - check_in_dt).total_seconds())
 
     periods = get_periods_for_attendance(attendance_id)
