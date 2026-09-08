@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 from app.config import Settings
-from app.services import activity_service
+from app.services import activity_service, break_service
 from app.services.supabase_client import get_service_client
 from app.services.time_service import get_office_today
 
@@ -244,6 +244,7 @@ def get_admin_attendance(
             continue
 
         summary = activity_service.get_activity_summary_for_attendance(row, settings)
+        break_summary = break_service.get_break_summary(row["id"])
         if inactivity_flag is not None and summary["flagged"] != inactivity_flag:
             continue
 
@@ -256,6 +257,8 @@ def get_admin_attendance(
                 "total_session_seconds": summary["total_session_seconds"],
                 "counted_inactivity_seconds": summary["counted_inactivity_seconds"],
                 "active_session_seconds": summary["active_session_seconds"],
+                "total_break_seconds": break_summary["total_break_seconds"],
+                "breaks": break_summary["sessions"],
                 "inactivity_flag": summary["flagged"],
             }
         )
