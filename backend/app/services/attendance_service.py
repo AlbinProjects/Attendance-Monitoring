@@ -31,7 +31,7 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException, status
 
 from app.config import Settings
-from app.services import audit_service, calendar_service, company_config_service, laptop_presence_service, location_service, network_service
+from app.services import audit_service, calendar_service, company_config_service, laptop_presence_service, location_service, network_service, remote_work_service
 from app.services.supabase_client import get_service_client
 from app.services.time_service import get_office_now, get_office_today, localize_time_on_date
 
@@ -93,19 +93,15 @@ def get_attendance_for_date(employee_id: str, attendance_date: date) -> Optional
 
 
 def get_attendance_history(employee_id: str) -> list:
-    """Return only the fields the employee attendance UI needs.
+    """Return the employee attendance history using only stable columns.
 
-    Keep this query deliberately narrow so newly-added attendance columns or
-    legacy schema differences cannot break the employee history screen.
-    Authentication/identity is still derived from the JWT employee record.
+    Keep this query deliberately narrow so newer/optional attendance columns
+    cannot make the employee history endpoint fail.
     """
     client = get_service_client()
     result = (
         client.table("attendance")
-        .select(
-            "id,employee_id,attendance_date,check_in,check_out,status,"
-            "check_in_source,check_out_source,reason,marked_by,created_at,updated_at"
-        )
+        .select("id,employee_id,attendance_date,check_in,check_out,status")
         .eq("employee_id", employee_id)
         .order("attendance_date", desc=True)
         .execute()
@@ -185,14 +181,40 @@ def create_check_in(
         )
 
     config = company_config_service.get_effective_config(settings)
+    remote = remote_work_service.get_today(employee_id)
 
+    # Work From Other Site is intentionally not an attendance punch mode.
+    # No check-in/check-out, laptop presence, office GPS radius, or laptop
+    # activity monitoring is required. Performance updates are still required
+    # through the normal performance workflow.
+    if remote and remote.get("work_mode") == "other_site":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Check-in and check-out are not required for approved Work From Other Site assignments.",
+        )
+
+    # Normal office work and Work From Home both require the laptop presence
+    # gate. WFH additionally uses a real phone GPS fix, but does not require
+    # the employee to be inside the office radius.
     if not laptop_presence_service.has_recent_presence(
         employee_id, config.laptop_presence_freshness_minutes, settings
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=LAPTOP_NOT_CONNECTED_MESSAGE)
 
-    _verify_network_if_static_mode(client_ip, config)
-    location = _verify_location_or_raise(latitude, longitude, accuracy, config)
+    if not remote:
+        _verify_network_if_static_mode(client_ip, config)
+    if remote:
+        if accuracy is None or accuracy > config.max_gps_accuracy_meters:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Location accuracy is too low. Please enable location services and try again.")
+        location = location_service.verify_location(
+            latitude, longitude, accuracy,
+            config.office_latitude, config.office_longitude,
+            10**9, config.max_gps_accuracy_meters
+        )
+        source = "remote_wfh"
+    else:
+        location = _verify_location_or_raise(latitude, longitude, accuracy, config)
+        source = "gps"
 
     now = get_office_now(settings)
     computed_status = determine_attendance_status(now, settings)
@@ -207,8 +229,10 @@ def create_check_in(
                     "attendance_date": today.isoformat(),
                     "check_in": now.isoformat(),
                     "status": computed_status,
-                    "check_in_source": "gps",
+                    "check_in_source": source,
                     "check_in_ip": client_ip,
+                    "remote_work_request_id": remote["id"] if remote else None,
+                    "work_location": ("Work From Home" if remote and remote["work_mode"] == "wfh" else remote.get("site_name") if remote else None),
                     "check_in_latitude": latitude,
                     "check_in_longitude": longitude,
                     "check_in_accuracy_meters": location.accuracy_meters,
@@ -236,6 +260,8 @@ def create_check_in(
             "check_in": row["check_in"],
             "status": computed_status,
             "location_verified": True,
+            "remote_work": bool(remote),
+            "work_mode": remote.get("work_mode") if remote else None,
             "distance_meters": location.distance_meters,
             "accuracy_meters": location.accuracy_meters,
             "network_mode": config.network_mode,
@@ -275,8 +301,22 @@ def create_check_out(
         )
 
     config = company_config_service.get_effective_config(settings)
-    _verify_network_if_static_mode(client_ip, config)
-    location = _verify_location_or_raise(latitude, longitude, accuracy, config)
+    remote = remote_work_service.get_today(employee_id)
+    if remote and remote.get("work_mode") == "other_site":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Check-in and check-out are not required for approved Work From Other Site assignments.",
+        )
+    if not remote:
+        _verify_network_if_static_mode(client_ip, config)
+    if remote:
+        if accuracy is None or accuracy > config.max_gps_accuracy_meters:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Location accuracy is too low. Please enable location services and try again.")
+        location = location_service.verify_location(latitude, longitude, accuracy, config.office_latitude, config.office_longitude, 10**9, config.max_gps_accuracy_meters)
+        source = "remote_wfh"
+    else:
+        location = _verify_location_or_raise(latitude, longitude, accuracy, config)
+        source = "gps"
 
     now = get_office_now(settings)
 
@@ -286,7 +326,7 @@ def create_check_out(
         .update(
             {
                 "check_out": now.isoformat(),
-                "check_out_source": "gps",
+                "check_out_source": source,
                 "check_out_ip": client_ip,
                 "check_out_latitude": latitude,
                 "check_out_longitude": longitude,
@@ -307,6 +347,8 @@ def create_check_out(
         new_value={
             "check_out": row["check_out"],
             "location_verified": True,
+            "remote_work": bool(remote),
+            "work_mode": remote.get("work_mode") if remote else None,
             "distance_meters": location.distance_meters,
             "accuracy_meters": location.accuracy_meters,
             "network_mode": config.network_mode,
