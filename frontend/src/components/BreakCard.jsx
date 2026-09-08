@@ -9,51 +9,107 @@ const TYPES = [
   ["evening", "Evening Break"],
 ];
 
+const EMPTY = {
+  total_break_seconds: 0,
+  active_break: null,
+  sessions: [],
+  used_break_types: [],
+  available_break_types: ["tea", "lunch", "evening"],
+};
+
 export default function BreakCard({ breakData, canStart = false, onChanged }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [localData, setLocalData] = useState(breakData || EMPTY);
 
   useEffect(() => {
-    if (!breakData?.active_break) return undefined;
+    setLocalData(breakData || EMPTY);
+  }, [breakData]);
+
+  useEffect(() => {
+    if (!localData?.active_break) return undefined;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [breakData?.active_break]);
+  }, [localData?.active_break]);
 
-  const active = breakData?.active_break;
+  const active = localData?.active_break;
   const activeSeconds = useMemo(() => {
     if (!active?.started_at) return 0;
     return Math.max(0, Math.floor((now - new Date(active.started_at).getTime()) / 1000));
   }, [active, now]);
 
+  const used = new Set(localData?.used_break_types || []);
+
+  async function refreshBreaks() {
+    try {
+      const res = await api.get("/breaks/today", { params: { _ts: Date.now() } });
+      setLocalData(res.data || EMPTY);
+      return res.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
   async function start(type) {
-    if (!canStart) return;
+    if (!canStart || busy || active || used.has(type)) return;
     setBusy(true);
     try {
-      await api.post("/breaks/start", { break_type: type });
+      const res = await api.post("/breaks/start", { break_type: type });
+      const row = res.data;
+      const sessions = [...(localData.sessions || []), row];
+      setLocalData({
+        ...localData,
+        active_break: row,
+        sessions,
+        used_break_types: [...new Set([...(localData.used_break_types || []), type])],
+        available_break_types: TYPES.map(([value]) => value).filter((value) => value !== type && !used.has(value)),
+      });
+      setNow(Date.now());
       showToast(`${labelFor(type)} started.`);
       onChanged?.();
     } catch (err) {
-      showToast(err?.response?.data?.detail || "Couldn't start break.", "error");
+      // Recover immediately from stale UI state (e.g. a previous request
+      // succeeded while the dashboard was still refreshing).
+      const latest = await refreshBreaks();
+      if (err?.response?.status === 409 && latest?.active_break) {
+        showToast(`${labelFor(latest.active_break.break_type)} is already in progress.`, "error");
+      } else {
+        showToast(err?.response?.data?.detail || "Couldn't start break.", "error");
+      }
     } finally {
       setBusy(false);
     }
   }
 
   async function end() {
+    if (busy || !active) return;
     setBusy(true);
     try {
-      await api.post("/breaks/end");
+      const res = await api.post("/breaks/end");
+      const row = res.data;
+      const sessions = (localData.sessions || []).map((item) => item.id === row.id ? { ...item, ended_at: row.ended_at } : item);
+      const total = sessions.reduce((sum, item) => {
+        const start = new Date(item.started_at).getTime();
+        const finish = item.ended_at ? new Date(item.ended_at).getTime() : Date.now();
+        return sum + Math.max(0, Math.floor((finish - start) / 1000));
+      }, 0);
+      setLocalData({ ...localData, active_break: null, sessions, total_break_seconds: total });
       showToast("Break ended.");
       onChanged?.();
     } catch (err) {
-      showToast(err?.response?.data?.detail || "Couldn't end break.", "error");
+      const latest = await refreshBreaks();
+      if (err?.response?.status === 409 && latest && !latest.active_break) {
+        showToast("Break was already ended.");
+      } else {
+        showToast(err?.response?.data?.detail || "Couldn't end break.", "error");
+      }
     } finally {
       setBusy(false);
     }
   }
 
-  if (!breakData) return null;
+  if (!localData) return null;
 
   return (
     <div className="rounded-2xl border border-border bg-white p-5 shadow-card">
@@ -64,9 +120,7 @@ export default function BreakCard({ breakData, canStart = false, onChanged }) {
             {active ? `${labelFor(active.break_type)} in progress` : canStart ? "Take a break" : "Breaks available after check-in"}
           </p>
         </div>
-        <span className="text-xs text-slate-muted font-mono">
-          Today: {formatDuration(breakData.total_break_seconds || 0)}
-        </span>
+        <span className="text-xs text-slate-muted font-mono">Today: {formatDuration(localData.total_break_seconds || 0)}</span>
       </div>
 
       {active ? (
@@ -81,25 +135,32 @@ export default function BreakCard({ breakData, canStart = false, onChanged }) {
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-2 mt-4">
-          {TYPES.map(([value, label]) => (
-            <button key={value} disabled={busy || !canStart} onClick={() => start(value)} className="rounded-xl border border-border px-3 py-2.5 text-xs font-medium text-ink hover:bg-surface disabled:opacity-60">
-              {label}
-            </button>
-          ))}
+          {TYPES.map(([value, label]) => {
+            const alreadyUsed = used.has(value);
+            return (
+              <button
+                key={value}
+                disabled={busy || !canStart || alreadyUsed}
+                onClick={() => start(value)}
+                title={alreadyUsed ? `${label} already used today` : undefined}
+                className="rounded-xl border border-border px-3 py-2.5 text-xs font-medium text-ink hover:bg-surface disabled:opacity-50"
+              >
+                {alreadyUsed ? `${label} ✓` : label}
+              </button>
+            );
+          })}
         </div>
       )}
-      {!active && !canStart && (
-        <p className="mt-3 text-xs text-slate-muted">Check in first to start a Tea, Lunch, or Evening break.</p>
-      )}
 
-      {breakData.sessions?.length > 0 && (
+      {!active && !canStart && <p className="mt-3 text-xs text-slate-muted">Check in first to start a Tea, Lunch, or Evening break.</p>}
+      {!active && canStart && <p className="mt-3 text-xs text-slate-muted">Each break type can be used once per day. You may take Tea, Lunch, and Evening breaks separately.</p>}
+
+      {localData.sessions?.length > 0 && (
         <div className="mt-4 pt-3 border-t border-border space-y-1.5">
-          {breakData.sessions.map((row) => (
+          {localData.sessions.map((row) => (
             <div key={row.id} className="flex items-center justify-between text-xs">
               <span className="text-slate-muted">{labelFor(row.break_type)}</span>
-              <span className="font-mono text-ink">
-                {formatTime(row.started_at)} → {row.ended_at ? formatTime(row.ended_at) : "now"}
-              </span>
+              <span className="font-mono text-ink">{formatTime(row.started_at)} → {row.ended_at ? formatTime(row.ended_at) : "now"}</span>
             </div>
           ))}
         </div>
