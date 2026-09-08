@@ -80,8 +80,4 @@ async def check_out(
 @router.get("/history")
 async def get_history(employee: dict = Depends(require_role("employee", "admin"))):
     """Attendance history for the calling employee."""
-    settings = get_settings()
-    return attendance_service.get_attendance_history(
-        employee["id"],
-        settings,
-    )
+    return attendance_service.get_attendance_history(employee["id"])
