@@ -64,7 +64,7 @@ def generate_attendance_csv(
         source=source,
         inactivity_flag=inactivity_flag,
     )
-    header = ["Employee", "Department", "Date", "Check In", "Check Out", "Status", "Source", "Active Time", "Inactivity"]
+    header = ["Employee", "Department", "Date", "Check In", "Check Out", "Status", "Source", "Break Time", "Active Time", "Inactivity"]
     rows = [
         [
             r.get("employee_name") or "",
@@ -74,6 +74,7 @@ def generate_attendance_csv(
             _format_time(r.get("check_out")),
             r.get("status") or "",
             r.get("check_in_source") or "",
+            _format_duration(r.get("total_break_seconds")),
             _format_duration(r.get("active_session_seconds")),
             _format_duration(r.get("counted_inactivity_seconds")),
         ]
