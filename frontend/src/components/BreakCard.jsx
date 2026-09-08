@@ -9,7 +9,7 @@ const TYPES = [
   ["evening", "Evening Break"],
 ];
 
-export default function BreakCard({ breakData, onChanged }) {
+export default function BreakCard({ breakData, onChanged, canStart = false }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -60,7 +60,7 @@ export default function BreakCard({ breakData, onChanged }) {
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-muted">Breaks</p>
           <p className="font-semibold text-ink mt-1">
-            {active ? `${labelFor(active.break_type)} in progress` : "Take a break"}
+            {active ? `${labelFor(active.break_type)} in progress` : canStart ? "Take a break" : "Breaks available after check-in"}
           </p>
         </div>
         <span className="text-xs text-slate-muted font-mono">
@@ -79,9 +79,10 @@ export default function BreakCard({ breakData, onChanged }) {
           </button>
         </div>
       ) : (
+        {!canStart && <p className="text-xs text-slate-muted mt-3">Check in first to start a Tea, Lunch, or Evening break.</p>}
         <div className="grid grid-cols-3 gap-2 mt-4">
           {TYPES.map(([value, label]) => (
-            <button key={value} disabled={busy} onClick={() => start(value)} className="rounded-xl border border-border px-3 py-2.5 text-xs font-medium text-ink hover:bg-surface disabled:opacity-60">
+            <button key={value} disabled={busy || !canStart} onClick={() => start(value)} className="rounded-xl border border-border px-3 py-2.5 text-xs font-medium text-ink hover:bg-surface disabled:opacity-60">
               {label}
             </button>
           ))}
