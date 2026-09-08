@@ -92,23 +92,27 @@ def get_attendance_for_date(employee_id: str, attendance_date: date) -> Optional
     return result.data
 
 
-def get_attendance_history(employee_id: str) -> list:
-    """Return the employee attendance history using only stable columns.
-
-    Keep this query deliberately narrow so newer/optional attendance columns
-    cannot make the employee history endpoint fail.
-    """
+def get_attendance_history(employee_id: str, settings: Optional[Settings] = None) -> list:
     client = get_service_client()
     result = (
         client.table("attendance")
-        .select("id,employee_id,attendance_date,check_in,check_out,status")
+        .select(
+            "id,employee_id,attendance_date,check_in,check_out,status,"
+            "check_in_source,check_out_source,reason,marked_by,created_at,updated_at"
+        )
         .eq("employee_id", employee_id)
         .order("attendance_date", desc=True)
         .execute()
     )
     if result is None:
         return []
-    return result.data or []
+    rows = result.data or []
+    from app.services import break_service
+    for row in rows:
+        summary = break_service.get_break_summary(row["id"])
+        row["total_break_seconds"] = summary["total_break_seconds"]
+        row["breaks"] = summary["sessions"]
+    return rows
 
 
 def _verify_location_or_raise(
@@ -299,6 +303,10 @@ def create_check_out(
             status_code=status.HTTP_409_CONFLICT,
             detail="You have already checked out today.",
         )
+
+    from app.services import break_service
+    if break_service._get_active_break(existing["id"]):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="End your active break before checking out.")
 
     config = company_config_service.get_effective_config(settings)
     remote = remote_work_service.get_today(employee_id)
