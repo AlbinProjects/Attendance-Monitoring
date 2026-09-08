@@ -9,9 +9,10 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.cors_allowed_origins, 
 @app.get("/health")
 def health_check():
     return {"status":"ok","environment":settings.environment}
-from app.routers import activity, admin, attendance, auth, calendar, employees, performance  # noqa: E402
+from app.routers import activity, admin, attendance, auth, calendar, employees, performance, breaks  # noqa: E402
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(attendance.router, prefix="/api/attendance", tags=["attendance"])
+app.include_router(breaks.router, prefix="/api/breaks", tags=["breaks"])
 app.include_router(performance.router, prefix="/api/performance", tags=["performance"])
 app.include_router(activity.router, prefix="/api/activity", tags=["activity"])
 app.include_router(employees.router, prefix="/api/admin/employees", tags=["employees"])
