@@ -149,6 +149,13 @@ def record_heartbeat(employee_id: str, settings: Settings) -> Dict[str, Any]:
 
     attendance = attendance_service.get_attendance_for_date(employee_id, today)
 
+    if attendance and attendance.get("check_in"):
+        from app.services import break_service
+        if break_service._get_active_break(attendance["id"]):
+            now = get_office_now(settings)
+            upsert_heartbeat(attendance["id"], employee_id, now)
+            return {"server_time": now.isoformat(), "monitoring": False, "reason": "break"}
+
     if not attendance or not attendance.get("check_in"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -238,19 +245,19 @@ def get_activity_summary_for_attendance(attendance: Optional[Dict[str, Any]], se
     if attendance.get("check_out"):
         end_dt = _parse(attendance["check_out"])
     else:
-        # An attendance record belongs to one office-calendar date. Never
-        # let an open session leak into the following day and inflate
-        # inactivity/active time (for example, a Sep 7 check-in viewed on
-        # Sep 8 must not become a 24+ hour session). The employee/admin
-        # should still be shown as checked in until the record is closed,
-        # but activity accounting for that attendance date stops at local
-        # midnight.
+        # Never let an open attendance session run into the next calendar
+        # day. Otherwise an employee who forgot to check out yesterday can
+        # appear to have 20+ hours of activity/inactivity today.
         next_day = check_in_dt.date() + __import__("datetime").timedelta(days=1)
         end_dt = min(now, datetime.combine(next_day, datetime.min.time(), tzinfo=check_in_dt.tzinfo))
     total_seconds = max(0.0, (end_dt - check_in_dt).total_seconds())
 
     periods = get_periods_for_attendance(attendance_id)
     counted_seconds = float(sum(p["counted_duration_seconds"] for p in periods))
+
+    from app.services import break_service
+    break_summary = break_service.get_break_summary(attendance_id, end_dt)
+    break_seconds = float(break_summary["total_break_seconds"])
 
     # The "tail": time since the last heartbeat (or check-in, if no
     # heartbeat ever arrived) up to the end boundary. Not persisted — this
@@ -263,7 +270,7 @@ def get_activity_summary_for_attendance(attendance: Optional[Dict[str, Any]], se
     if tail_gap_seconds > grace_seconds:
         counted_seconds += tail_gap_seconds - grace_seconds
 
-    active_seconds = max(0.0, total_seconds - counted_seconds)
+    active_seconds = max(0.0, total_seconds - counted_seconds - break_seconds)
     flagged = counted_seconds > settings.daily_inactivity_flag_minutes * 60
 
     return {
@@ -274,6 +281,9 @@ def get_activity_summary_for_attendance(attendance: Optional[Dict[str, Any]], se
         "total_session_seconds": int(total_seconds),
         "counted_inactivity_seconds": int(counted_seconds),
         "active_session_seconds": int(active_seconds),
+        "total_break_seconds": int(break_seconds),
+        "active_break": break_summary["active_break"],
+        "breaks": break_summary["sessions"],
         "flagged": flagged,
         "periods": periods,
     }
