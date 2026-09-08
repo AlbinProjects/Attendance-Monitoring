@@ -305,7 +305,13 @@ export default function EmployeeDashboard() {
 
       {!((onDuty?.status === "approved" || onDuty?.status === "started") && !today?.check_in) && !isOtherSite && <PunchCard today={today} punching={punching} statusLabel={punchStatusLabel} onPunch={handlePunch} />}
 
-      {employee?.role === "employee" && !isOtherSite && !isOnDuty && today?.check_in && !today?.check_out && <BreakCard breakData={breakData} onChanged={loadAll} />}
+      {employee?.role === "employee" && !isOtherSite && !isOnDuty && (
+        <BreakCard
+          breakData={breakData || { total_break_seconds: 0, sessions: [], active_break: null }}
+          onChanged={loadAll}
+          canStart={!!today?.check_in && !today?.check_out}
+        />
+      )}
 
       {employee?.role === "employee" && !isOtherSite && !isOnDuty && <ActivityCard activity={activity} />}
 
