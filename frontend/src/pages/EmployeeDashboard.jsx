@@ -13,6 +13,7 @@ import MonthlySummaryCard from "../components/MonthlySummaryCard";
 import LoadingScreen from "../components/LoadingScreen";
 import StatusBadge from "../components/StatusBadge";
 import LaptopStatusCard from "../components/LaptopStatusCard";
+import BreakCard from "../components/BreakCard";
 
 export default function EmployeeDashboard() {
   const { employee } = useAuth();
@@ -30,6 +31,7 @@ export default function EmployeeDashboard() {
   const [onDuty, setOnDuty] = useState(null);
   const [onDutyBusy, setOnDutyBusy] = useState(false);
   const [remoteWork, setRemoteWork] = useState(null);
+  const [breakData, setBreakData] = useState(null);
   const { getLocation } = useGeolocation();
 
   const isCheckedIn = !!today?.check_in && !today?.check_out;
@@ -41,17 +43,19 @@ export default function EmployeeDashboard() {
   useActivityHeartbeat(employee?.role === "employee" && isCheckedIn);
 
   const loadAll = useCallback(async () => {
-    const [todayRes, perfRes, missingRes, historyRes, onDutyRes, remoteRes] = await Promise.all([
+    const [todayRes, perfRes, missingRes, historyRes, onDutyRes, remoteRes, breakRes] = await Promise.all([
       api.get("/attendance/today"),
       api.get("/performance/today"),
       api.get("/performance/missing"),
       api.get("/attendance/history"),
       api.get("/calendar/on-duty/today"),
       api.get("/calendar/remote-work/today"),
+      api.get("/breaks/today"),
     ]);
     setToday(todayRes.data);
     setOnDuty(onDutyRes.data);
     setRemoteWork(remoteRes.data);
+    setBreakData(breakRes.data);
     setPerformanceToday(perfRes.data);
     setMissing(missingRes.data);
     const currentMonth = new Date();
@@ -300,6 +304,8 @@ export default function EmployeeDashboard() {
       )}
 
       {!((onDuty?.status === "approved" || onDuty?.status === "started") && !today?.check_in) && !isOtherSite && <PunchCard today={today} punching={punching} statusLabel={punchStatusLabel} onPunch={handlePunch} />}
+
+      {employee?.role === "employee" && !isOtherSite && !isOnDuty && today?.check_in && !today?.check_out && <BreakCard breakData={breakData} onChanged={loadAll} />}
 
       {employee?.role === "employee" && !isOtherSite && !isOnDuty && <ActivityCard activity={activity} />}
 
