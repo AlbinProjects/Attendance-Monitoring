@@ -44,12 +44,15 @@ export default function EmployeeDashboard() {
     employee?.role === "employee" && advancedMonitoringEnabled && isCheckedIn && !isOtherSite && !isOnDuty
   );
 
-  // Only sends heartbeats while there's an open attendance session — see
-  // hooks/useActivityHeartbeat.js.
-  useActivityHeartbeat(employee?.role === "employee" && isCheckedIn);
+  // Activity monitoring is optional and controlled only by Super Admin.
+  // When Advanced Desktop Monitoring is OFF, do not collect browser activity
+  // either and do not show the Today's Session monitoring card.
+  useActivityHeartbeat(employee?.role === "employee" && advancedMonitoringEnabled && isCheckedIn);
 
   const loadAll = useCallback(async () => {
-    const [todayRes, perfRes, missingRes, historyRes, onDutyRes, remoteRes, breakRes] = await Promise.all([
+    // Do not let an optional/history endpoint failure prevent essential
+    // dashboard sections (especially Breaks) from rendering.
+    const results = await Promise.allSettled([
       api.get("/attendance/today"),
       api.get("/performance/today"),
       api.get("/performance/missing"),
@@ -58,19 +61,25 @@ export default function EmployeeDashboard() {
       api.get("/calendar/remote-work/today"),
       api.get("/breaks/today"),
     ]);
-    setToday(todayRes.data);
-    setOnDuty(onDutyRes.data);
-    setRemoteWork(remoteRes.data);
-    setBreakData(breakRes.data);
-    setPerformanceToday(perfRes.data);
-    setMissing(missingRes.data);
+
+    const value = (index, fallback = null) =>
+      results[index]?.status === "fulfilled" ? results[index].value.data : fallback;
+
+    setToday(value(0));
+    setPerformanceToday(value(1));
+    setMissing(value(2, []));
+    setOnDuty(value(4));
+    setRemoteWork(value(5));
+    setBreakData(value(6, { attendance: null, total_break_seconds: 0, active_break: null, sessions: [] }));
+    const historyData = value(3, []);
+    const historyRows = Array.isArray(historyData) ? historyData : [];
     const currentMonth = new Date();
     const currentYear = currentMonth.getFullYear();
     const currentMonthNumber = String(
       currentMonth.getMonth() + 1
     ).padStart(2, "0");
 
-    const currentMonthHistory = historyRes.data.filter((row) => {
+    const currentMonthHistory = historyRows.filter((row) => {
      const date = row.attendance_date || "";
      return date.startsWith(
        `${currentYear}-${currentMonthNumber}-`
@@ -141,7 +150,7 @@ export default function EmployeeDashboard() {
   // active/inactive time on screen stays roughly current without the user
   // needing to refresh.
   useEffect(() => {
-    if (!isCheckedIn) {
+    if (!advancedMonitoringEnabled || !isCheckedIn) {
       setActivity(null);
       return undefined;
     }
@@ -159,7 +168,7 @@ export default function EmployeeDashboard() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [isCheckedIn]);
+  }, [advancedMonitoringEnabled, isCheckedIn]);
 
   // Only matters before check-in — that's when the laptop-presence gate
   // applies. Poll so the indicator updates live once the employee opens
@@ -239,6 +248,25 @@ export default function EmployeeDashboard() {
       const res = await api.get("/attendance/today");
       setToday(res.data);
     } catch (err) {
+      // A slow first request can make a second click arrive after the
+      // attendance row has already been created. Treat that race as a
+      // state-refresh event rather than showing a confusing failure.
+      if (err?.response?.status === 409) {
+        try {
+          const res = await api.get("/attendance/today", { params: { _ts: Date.now() } });
+          setToday(res.data);
+          if (res.data?.check_in && !res.data?.check_out) {
+            showToast("You are already checked in.");
+          } else if (res.data?.check_out) {
+            showToast("Today's attendance is already completed.");
+          } else {
+            showToast(err?.response?.data?.detail || "Attendance is already recorded.", "error");
+          }
+          return;
+        } catch (_) {
+          // Fall through to the normal error message if refresh fails.
+        }
+      }
       showToast(
         err?.response?.data?.detail || "Something went wrong. Please try again.",
         "error"
@@ -326,7 +354,7 @@ export default function EmployeeDashboard() {
 
       {employee?.role === "employee" && !isOtherSite && !isOnDuty && <BreakCard breakData={breakData} canStart={!!today?.check_in && !today?.check_out} onChanged={loadAll} />}
 
-      {employee?.role === "employee" && !isOtherSite && !isOnDuty && <ActivityCard activity={activity} />}
+      {employee?.role === "employee" && advancedMonitoringEnabled && !isOtherSite && !isOnDuty && <ActivityCard activity={activity} desktopActivity={desktopAgentStatus} />}
       {employee?.role === "employee" && advancedMonitoringEnabled && isCheckedIn && !isOtherSite && !isOnDuty && (
         <Card className="border-brand/20">
           <div className="flex items-center justify-between gap-3">
