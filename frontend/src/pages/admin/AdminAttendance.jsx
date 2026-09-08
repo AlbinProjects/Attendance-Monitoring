@@ -136,7 +136,7 @@ export default function AdminAttendance() {
       </Card>
 
       <Card className="!p-0 overflow-x-auto">
-        <table className="w-full text-sm min-w-[950px]">
+        <table className="w-full text-sm min-w-[1030px]">
           <thead>
             <tr className="border-b border-border text-left text-xs text-slate-muted">
               <th className="px-4 py-3 font-medium">Employee</th>
@@ -146,6 +146,7 @@ export default function AdminAttendance() {
               <th className="px-4 py-3 font-medium">Check-out</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Source</th>
+              <th className="px-4 py-3 font-medium">Break time</th>
               <th className="px-4 py-3 font-medium">Active</th>
               <th className="px-4 py-3 font-medium">Inactivity</th>
               <th className="px-4 py-3 font-medium">Flag</th>
@@ -155,13 +156,13 @@ export default function AdminAttendance() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-slate-muted">
+                <td colSpan={12} className="px-4 py-8 text-center text-slate-muted">
                   Loading…
                 </td>
               </tr>
             ) : rows?.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-slate-muted">
+                <td colSpan={12} className="px-4 py-8 text-center text-slate-muted">
                   No attendance records match these filters.
                 </td>
               </tr>
@@ -177,6 +178,7 @@ export default function AdminAttendance() {
                     <StatusBadge status={r.status} />
                   </td>
                   <td className="px-4 py-3 text-slate-muted">{formatSourceLabel(r.check_in_source)}</td>
+                  <td className="px-4 py-3 font-mono">{formatDuration(r.total_break_seconds || 0)}</td>
                   <td className="px-4 py-3 font-mono">{formatDuration(r.active_session_seconds)}</td>
                   <td className="px-4 py-3 font-mono">{formatDuration(r.counted_inactivity_seconds)}</td>
                   <td className="px-4 py-3">
