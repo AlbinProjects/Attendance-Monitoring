@@ -3,7 +3,7 @@ import api from "../services/api";
 import Card from "../components/Card";
 import StatusBadge from "../components/StatusBadge";
 import LoadingScreen from "../components/LoadingScreen";
-import { formatDate, formatTime } from "../utils/formatters";
+import { formatDate, formatTime, formatDuration } from "../utils/formatters";
 
 export default function Attendance() {
   const [history, setHistory] = useState(null);
@@ -38,10 +38,21 @@ export default function Attendance() {
                   <p className="text-sm font-medium text-ink">{formatDate(row.attendance_date, { withYear: true })}</p>
                   {row.status ? <StatusBadge status={row.status} /> : <span className="rounded-full bg-surface px-2.5 py-1 text-xs text-slate-muted">Not checked in</span>}
                 </div>
-                <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
+                <div className="grid grid-cols-3 gap-3 mt-3 text-sm">
                   <div><p className="text-slate-muted text-xs">Check-in</p><p className="font-mono mt-0.5">{formatTime(row.check_in) || "—"}</p></div>
                   <div><p className="text-slate-muted text-xs">Check-out</p><p className="font-mono mt-0.5">{formatTime(row.check_out) || "—"}</p></div>
+                  <div><p className="text-slate-muted text-xs">Break time</p><p className="font-mono mt-0.5">{formatDuration(row.total_break_seconds || 0)}</p></div>
                 </div>
+                {row.breaks?.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-border space-y-1">
+                    {row.breaks.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between text-xs">
+                        <span className="text-slate-muted">{breakLabel(b.break_type)}</span>
+                        <span className="font-mono text-ink">{formatTime(b.started_at)} → {b.ended_at ? formatTime(b.ended_at) : "now"}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {row.status === "manual" && row.reason && <p className="text-xs text-neutral2 mt-3 bg-neutral2-tint rounded-lg px-2.5 py-1.5">Marked by admin: {row.reason}</p>}
               </Card>
             ))}
@@ -50,6 +61,10 @@ export default function Attendance() {
       ))}
     </div>
   );
+}
+
+function breakLabel(type) {
+  return { tea: "Tea Break", lunch: "Lunch Break", evening: "Evening Break" }[type] || type;
 }
 
 function groupByMonth(rows, dateField) {
