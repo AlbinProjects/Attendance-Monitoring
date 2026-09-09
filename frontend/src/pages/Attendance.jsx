@@ -83,10 +83,13 @@ export default function Attendance() {
 
       {error && <Card className="!border-danger/30 !bg-danger-tint"><p className="text-sm text-danger">{error}</p><button onClick={load} className="mt-2 rounded-lg border px-3 py-1.5 text-xs">Retry</button></Card>}
 
-      <Card>
+      <Card className="!border-amber/30 !bg-amber-50/40">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-semibold text-ink">Request Half-Day Leave</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold text-ink">Request Half-Day Leave</h2>
+              <span className="rounded-full bg-white border border-amber/30 text-amber px-2 py-0.5 text-[10px] font-medium">Available</span>
+            </div>
             <p className="text-xs text-slate-muted mt-1">Request a morning or afternoon half-day in advance. Half-day leave does not use paid or sick leave balance and requires Admin/Super Admin approval.</p>
           </div>
           <span className="rounded-full bg-amber-tint text-amber px-2.5 py-1 text-[11px] font-medium shrink-0">Half day</span>
@@ -168,7 +171,12 @@ function AttendanceDay({ day }) {
             {dayLabel}{detail ? ` · ${detail}` : ""}
           </p>
         </div>
-        {attendance?.status && <StatusPill status={attendance.status} />}
+        <div className="flex items-center gap-2 shrink-0">
+          {day.work_status === "checkout_missed" && (
+            <span className="rounded-full bg-danger-tint text-danger px-2.5 py-1 text-xs font-medium">Check-out missed</span>
+          )}
+          {attendance?.status && <StatusPill status={attendance.status} />}
+        </div>
       </div>
 
       {leave ? (
@@ -181,7 +189,12 @@ function AttendanceDay({ day }) {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
             <Field label="Check-in" value={formatTime(attendance?.check_in) || "—"} mono />
-            <Field label="Check-out" value={formatTime(attendance?.check_out) || "—"} mono />
+            <Field
+              label="Check-out"
+              value={day.work_status === "checkout_missed" ? "Check-out missed" : (formatTime(attendance?.check_out) || "—")}
+              mono
+              alert={day.work_status === "checkout_missed"}
+            />
             <Field label="Break time" value={formatDuration(day.total_break_seconds || 0)} mono />
             <Field label="Net work" value={day.net_work_seconds == null ? "—" : formatDuration(day.net_work_seconds)} mono />
           </div>
@@ -212,7 +225,7 @@ function WorkTarget({ day }) {
   if (day.work_status === "completed_8h") { message = "8-hour target completed"; cls = "text-brand-dark"; }
   else if (day.work_status === "short_8h") { message = `Short by ${formatDuration(target - actual)}`; cls = "text-danger"; }
   else if (day.work_status === "in_progress") { message = `${formatDuration(Math.max(0, target - actual))} remaining`; cls = "text-amber"; }
-  else if (day.work_status === "incomplete_checkout") { message = "No check-out recorded — day is incomplete"; cls = "text-amber"; }
+  else if (day.work_status === "checkout_missed") { message = "⚠ Check-out missed"; cls = "text-danger"; }
 
   return (
     <div className="mt-3 rounded-xl border border-border bg-surface px-3.5 py-3">
@@ -244,8 +257,8 @@ function BreakDetails({ breaks }) {
   );
 }
 
-function Field({ label, value, mono }) {
-  return <div><p className="text-slate-muted text-xs">{label}</p><p className={`${mono ? "font-mono" : ""} mt-0.5`}>{value}</p></div>;
+function Field({ label, value, mono, alert }) {
+  return <div><p className="text-slate-muted text-xs">{label}</p><p className={`${mono ? "font-mono" : ""} mt-0.5 ${alert ? "text-danger font-semibold" : ""}`}>{value}</p></div>;
 }
 
 function StatusPill({ status }) {
