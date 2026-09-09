@@ -3,6 +3,7 @@ import api from "../services/api";
 import Card from "../components/Card";
 import LoadingScreen from "../components/LoadingScreen";
 import { formatDate, formatTime, formatDuration } from "../utils/formatters";
+import { useToast } from "../context/ToastContext";
 
 const DAY_LABELS = {
   working_day: "Working day",
@@ -21,6 +22,13 @@ export default function Attendance() {
   const [days, setDays] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
+  const [halfDay, setHalfDay] = useState({
+    leave_date: current.toISOString().slice(0, 10),
+    half_day_period: "morning",
+    reason: "",
+  });
+  const [halfDayRequesting, setHalfDayRequesting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +82,49 @@ export default function Attendance() {
       </div>
 
       {error && <Card className="!border-danger/30 !bg-danger-tint"><p className="text-sm text-danger">{error}</p><button onClick={load} className="mt-2 rounded-lg border px-3 py-1.5 text-xs">Retry</button></Card>}
+
+      <Card>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-ink">Request Half-Day Leave</h2>
+            <p className="text-xs text-slate-muted mt-1">Request a morning or afternoon half-day in advance. Half-day leave does not use paid or sick leave balance and requires Admin/Super Admin approval.</p>
+          </div>
+          <span className="rounded-full bg-amber-tint text-amber px-2.5 py-1 text-[11px] font-medium shrink-0">Half day</span>
+        </div>
+        <div className="grid md:grid-cols-3 gap-3 mt-3">
+          <input type="date" min={new Date().toISOString().slice(0, 10)} value={halfDay.leave_date} onChange={(e) => setHalfDay((prev) => ({ ...prev, leave_date: e.target.value }))} className="rounded-xl border px-3 py-2.5 text-sm" />
+          <select value={halfDay.half_day_period} onChange={(e) => setHalfDay((prev) => ({ ...prev, half_day_period: e.target.value }))} className="rounded-xl border px-3 py-2.5 text-sm">
+            <option value="morning">Morning half-day</option>
+            <option value="afternoon">Afternoon half-day</option>
+          </select>
+          <input placeholder="Reason" value={halfDay.reason} onChange={(e) => setHalfDay((prev) => ({ ...prev, reason: e.target.value }))} className="rounded-xl border px-3 py-2.5 text-sm" />
+        </div>
+        <div className="flex items-center justify-between gap-3 mt-3">
+          <p className="text-xs text-slate-muted">Already worked 4+ net hours today? You can also request the afternoon half-day from the Check-out confirmation.</p>
+          <button
+            disabled={halfDayRequesting}
+            onClick={async () => {
+              if (!halfDay.leave_date || !halfDay.reason.trim()) {
+                showToast("Select a date and enter a reason.", "error");
+                return;
+              }
+              setHalfDayRequesting(true);
+              try {
+                await api.post("/calendar/leave/request", null, { params: { leave_date: halfDay.leave_date, leave_type: "half_day", half_day_period: halfDay.half_day_period, reason: halfDay.reason.trim() } });
+                showToast("Half-day leave request sent for approval.");
+                setHalfDay((prev) => ({ ...prev, reason: "" }));
+              } catch (err) {
+                showToast(err?.response?.data?.detail || "Couldn't submit half-day leave request.", "error");
+              } finally {
+                setHalfDayRequesting(false);
+              }
+            }}
+            className="rounded-xl bg-ink text-white px-4 py-2.5 text-sm disabled:opacity-60 shrink-0"
+          >
+            {halfDayRequesting ? "Sending…" : "Ask for approval"}
+          </button>
+        </div>
+      </Card>
 
       <div className="space-y-3">
         {(days || []).map((day) => <AttendanceDay key={day.date} day={day} />)}
