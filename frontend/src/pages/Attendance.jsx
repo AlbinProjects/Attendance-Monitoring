@@ -152,19 +152,34 @@ function AttendanceDay({ day }) {
 function WorkTarget({ day }) {
   const target = day.target_work_seconds || 8 * 3600;
   const actual = day.net_work_seconds;
-  if (actual == null) return <p className="mt-3 text-xs text-slate-muted">Daily target: <strong>8h</strong></p>;
+  if (actual == null) return null;
 
+  const completed = actual >= target;
+  const percent = Math.min(100, Math.round((actual / target) * 100));
   let message = "";
   let cls = "text-slate-muted";
   if (day.work_status === "completed_8h") { message = "8-hour target completed"; cls = "text-brand-dark"; }
   else if (day.work_status === "short_8h") { message = `Short by ${formatDuration(target - actual)}`; cls = "text-danger"; }
-  else if (day.work_status === "in_progress") { message = `In progress · ${formatDuration(Math.max(0, target - actual))} remaining to reach 8h`; cls = "text-amber"; }
+  else if (day.work_status === "in_progress") { message = `${formatDuration(Math.max(0, target - actual))} remaining`; cls = "text-amber"; }
   else if (day.work_status === "incomplete_checkout") { message = "No check-out recorded — day is incomplete"; cls = "text-amber"; }
 
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2">
-      <span className="text-xs text-slate-muted">Daily work target: <strong className="text-ink">8h</strong></span>
-      <span className={`text-xs font-medium ${cls}`}>{formatDuration(actual)} / 8h · {message}</span>
+    <div className="mt-3 rounded-xl border border-border bg-surface px-3.5 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-muted">8-hour work completion</p>
+          <p className={`text-sm font-medium mt-0.5 ${cls}`}>
+            {completed ? "✓ 8 hours completed" : message}
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="font-mono text-sm font-semibold text-ink">{formatDuration(actual)} / 8h</p>
+          <p className={`text-[11px] ${cls}`}>{percent}%</p>
+        </div>
+      </div>
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-border">
+        <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percent}%` }} />
+      </div>
     </div>
   );
 }
