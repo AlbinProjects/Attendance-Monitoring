@@ -65,7 +65,7 @@ async def update_employee(
 ):
     update_data = payload.model_dump(exclude_unset=True)
     if employee["role"] != "super_admin":
-        forbidden = {k for k in ("employee_code", "email", "role", "is_active") if k in update_data}
+        forbidden = {k for k in ("employee_code", "email", "role", "is_active", "password") if k in update_data}
         if forbidden:
             from fastapi import HTTPException, status
             raise HTTPException(
@@ -73,7 +73,11 @@ async def update_employee(
                 detail="Only Super Admin can change employee ID, email, role, or account status.",
             )
     ip_address = network_service.get_verified_client_ip(request)
+    password = update_data.pop("password", None)
     row = employees_service.update_employee(employee_id, update_data, employee["id"], ip_address)
+    if password is not None:
+        employees_service.set_employee_password(employee_id, password, employee["id"], ip_address)
+        row = employees_service.get_employee(employee_id)
     return _public_view(row)
 
 
