@@ -64,14 +64,15 @@ def generate_attendance_csv(
         source=source,
         inactivity_flag=inactivity_flag,
     )
-    header = ["Employee", "Department", "Date", "Check In", "Check Out", "Status", "Source", "Break Time", "Active Time", "Inactivity"]
+    header = ["Employee", "Department", "Date", "Check In", "Check Out", "Check-out Status", "Status", "Source", "Break Time", "Active Time", "Inactivity"]
     rows = [
         [
             r.get("employee_name") or "",
             r.get("department") or "",
             r.get("attendance_date") or "",
             _format_time(r.get("check_in")),
-            _format_time(r.get("check_out")),
+            _format_time(r.get("check_out")) if not r.get("checkout_missed") else "",
+            "Check-out missed" if r.get("checkout_missed") else "Completed / Open",
             r.get("status") or "",
             r.get("check_in_source") or "",
             _format_duration(r.get("total_break_seconds")),
