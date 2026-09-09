@@ -134,6 +134,45 @@ def create_employee(
     return row, temp_password
 
 
+
+def get_employee(employee_id: str) -> Dict[str, Any]:
+    client = get_service_client()
+    row = client.table("employees").select("*").eq("id", employee_id).maybe_single().execute().data
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found.")
+    return row
+
+
+def set_employee_password(
+    employee_id: str,
+    new_password: str,
+    performed_by: str,
+    ip_address: Optional[str],
+) -> None:
+    """Set another account's password. Router restricts this to Super Admin."""
+    if len(new_password) < 8:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Password must be at least 8 characters long.")
+
+    existing = get_employee(employee_id)
+    try:
+        get_service_client().auth.admin.update_user_by_id(
+            existing["auth_user_id"], {"password": new_password}
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not change the login password.",
+        ) from exc
+
+    audit_service.write_audit_log(
+        action="EMPLOYEE_PASSWORD_CHANGED",
+        employee_id=employee_id,
+        new_value={"changed_by": performed_by},
+        performed_by=performed_by,
+        ip_address=ip_address,
+    )
+
+
 def update_employee(
     employee_id: str,
     payload: Dict[str, Any],
