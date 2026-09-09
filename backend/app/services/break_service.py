@@ -1,4 +1,4 @@
-"""Employee break tracking for checked-in office/WFH sessions."""
+"""Employee break tracking for checked-in office/WFH sessions ."""
 from datetime import date
 from typing import Any, Dict, List, Optional
 
