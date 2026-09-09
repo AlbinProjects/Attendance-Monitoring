@@ -56,7 +56,11 @@ export default function Calendar() {
   }, [load]);
 
   const leaveByDate = useMemo(
-    () => Object.fromEntries(leaves.filter((x) => x.status === "approved").map((x) => [x.leave_date, x])),
+    () => Object.fromEntries(
+      leaves
+        .filter((x) => ["approved", "pending"].includes(x.status))
+        .map((x) => [x.leave_date, x])
+    ),
     [leaves]
   );
 
@@ -76,9 +80,15 @@ export default function Calendar() {
     }
     setRequesting(true);
     try {
-      await api.post("/calendar/leave/request", null, {
-        params: request,
-      });
+      // half_day_period is only valid for half-day leave. Do not send the
+      // default morning value for paid/sick requests.
+      const params = {
+        leave_date: request.leave_date,
+        leave_type: request.leave_type,
+        reason: request.reason,
+        ...(request.leave_type === "half_day" ? { half_day_period: request.half_day_period } : {}),
+      };
+      await api.post("/calendar/leave/request", null, { params });
       showToast("Leave request sent for approval.");
       setRequest((prev) => ({ ...prev, reason: "", half_day_period: "morning" }));
       await load();
@@ -191,18 +201,22 @@ export default function Calendar() {
               <button
                 type="button"
                 key={d.calendar_date}
-                onClick={() => d.is_working_day && setRequest((prev) => ({ ...prev, leave_date: d.calendar_date }))}
-                className={`min-h-16 rounded-lg border p-1.5 text-left ${isHoliday ? "bg-red-50 border-red-200" : isToday ? "bg-blue-50 border-blue-200" : d.is_working_day ? "bg-white hover:border-brand" : "bg-slate-50 cursor-default"} ${isToday ? "ring-1 ring-blue-300" : ""} ${isSelected ? "ring-2 ring-brand" : ""}`}
+                onClick={() => d.is_working_day && !leave && setRequest((prev) => ({ ...prev, leave_date: d.calendar_date }))}
+                className={`min-h-16 rounded-lg border p-1.5 text-left ${leave ? "bg-amber-50 border-amber-200" : isHoliday ? "bg-red-50 border-red-200" : isToday ? "bg-blue-50 border-blue-200" : d.is_working_day ? "bg-white hover:border-brand" : "bg-slate-50 cursor-default"} ${isToday ? "ring-1 ring-blue-300" : ""} ${isSelected ? "ring-2 ring-brand" : ""}`}
               >
                 <div className="text-xs font-medium">{Number(d.calendar_date.slice(-2))}</div>
                 <div className="text-[10px] mt-1 truncate">
-                  {leave ? (leave.leave_type === "half_day" ? "Half-day leave" : `${leave.leave_type} leave`) : d.is_working_day ? "Working" : (d.name || d.day_type.replaceAll("_", " "))}
+                  {leave
+                    ? (leave.leave_type === "half_day"
+                      ? `Half-day · ${leave.half_day_period === "morning" ? "Morning" : "Afternoon"}${leave.status === "pending" ? " · Pending" : ""}`
+                      : `${leave.leave_type} leave${leave.status === "pending" ? " · Pending" : ""}`)
+                    : d.is_working_day ? "Working" : (d.name || d.day_type.replaceAll("_", " "))}
                 </div>
               </button>
             );
           })}
         </div>
-        <p className="text-xs text-slate-muted mt-3">Tap a working day to select it for a leave request.</p>
+        <p className="text-xs text-slate-muted mt-3">Approved and pending leave requests are shown on their dates. Tap an unassigned working day to select it for a leave request.</p>
       </Card>
 
       <Card>
@@ -288,7 +302,7 @@ export default function Calendar() {
             {leaves.map((x) => (
               <div key={x.id} className="flex flex-wrap justify-between gap-2 border-b last:border-0 py-2 text-sm">
                 <span>{formatDate(x.leave_date, { withYear: true })}</span>
-                <span className="capitalize">{x.leave_type} · {STATUS_LABEL[x.status] || x.status}</span>
+                <span className="capitalize">{x.leave_type === "half_day" ? `half-day · ${x.half_day_period === "morning" ? "morning" : "afternoon"}` : x.leave_type} · {STATUS_LABEL[x.status] || x.status}</span>
               </div>
             ))}
           </div>
