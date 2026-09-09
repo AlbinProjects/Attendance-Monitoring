@@ -61,7 +61,7 @@ export default function Employees() {
     try {
       await api.put(`/admin/employees/${employeeId}`, {
         ...(isSuperAdmin
-          ? values
+          ? Object.fromEntries(Object.entries(values).filter(([key, value]) => key !== "password" || value))
           : {
               name: values.name,
               department: values.department,
