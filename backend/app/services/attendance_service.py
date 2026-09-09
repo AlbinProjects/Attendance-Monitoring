@@ -394,10 +394,22 @@ def create_check_in(
             detail="Check-in and check-out are not required for approved Work From Other Site assignments.",
         )
 
-    # Normal office work and Work From Home both require the laptop presence
-    # gate. WFH additionally uses a real phone GPS fix, but does not require
-    # the employee to be inside the office radius.
-    if not laptop_presence_service.has_recent_presence(
+    # Employees use the laptop-presence gate for normal office/WFH attendance.
+    # Admin accounts are also allowed to punch attendance, but they are not
+    # subject to laptop monitoring/presence requirements. Super Admin is never
+    # allowed through the normal attendance router and therefore does not need
+    # an attendance record.
+    employee_result = (
+        get_service_client()
+        .table("employees")
+        .select("role")
+        .eq("id", employee_id)
+        .maybe_single()
+        .execute()
+    )
+    employee_role = employee_result.data.get("role") if employee_result and employee_result.data else None
+
+    if employee_role == "employee" and not laptop_presence_service.has_recent_presence(
         employee_id, config.laptop_presence_freshness_minutes, settings
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=LAPTOP_NOT_CONNECTED_MESSAGE)
