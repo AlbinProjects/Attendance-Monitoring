@@ -212,10 +212,23 @@ def get_monthly_attendance(employee_id: str, year: int, month: int, settings: Se
                     end_dt = now
                     work_status = "in_progress"
                 else:
+                    # A previous day's open punch is never allowed to remain
+                    # "in progress" on a later date. From the following day
+                    # onward it is explicitly a missed check-out.
                     end_dt = datetime.combine(d + timedelta(days=1), dt_time.min, tzinfo=check_in_dt.tzinfo)
-                    work_status = "incomplete_checkout"
+                    work_status = "checkout_missed"
                 gross = max(0, int((end_dt - check_in_dt).total_seconds()))
                 net_work_seconds = max(0, gross - total_break_seconds)
+
+                # A missing checkout on a previous day must never keep the
+                # session running into later dates.  The date boundary above
+                # caps elapsed time at midnight; additionally cap the reported
+                # net work for an unclosed past-day attendance at the daily
+                # 8-hour target.  This prevents an old open punch from turning
+                # into 15h/20h/etc. of phantom work while still showing the day
+                # as an incomplete checkout.
+                if work_status == "checkout_missed":
+                    net_work_seconds = min(net_work_seconds, target_seconds)
                 if work_status == "completed":
                     work_status = "completed_8h" if net_work_seconds >= target_seconds else "short_8h"
             elif d < today:
