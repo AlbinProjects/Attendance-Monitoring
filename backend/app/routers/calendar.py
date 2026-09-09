@@ -42,8 +42,12 @@ async def get_all_employee_leaves(start_date: Optional[date] = None, end_date: O
     return calendar_service.get_all_leaves(start_date, end_date, employee_id, status_filter)
 
 @router.post("/leave/request")
-async def request_leave(leave_date: date, leave_type: str, reason: str, employee: dict = Depends(require_role("employee", "admin"))):
-    return calendar_service.request_leave(employee["id"], leave_date, leave_type, reason)
+async def request_leave(leave_date: date, leave_type: str, reason: str, half_day_period: Optional[str] = None, employee: dict = Depends(require_role("employee", "admin"))):
+    return calendar_service.request_leave(employee["id"], leave_date, leave_type, reason, half_day_period)
+
+@router.post("/leave/request-half-day")
+async def request_half_day_leave(reason: Optional[str] = None, employee: dict = Depends(require_role("employee", "admin"))):
+    return calendar_service.request_half_day_leave(employee["id"], reason)
 
 @router.post("/admin/leave/{leave_id}/approve", dependencies=[Depends(require_role("admin", "super_admin"))])
 async def approve_leave_request(leave_id: str, employee: dict = Depends(get_current_employee)):
