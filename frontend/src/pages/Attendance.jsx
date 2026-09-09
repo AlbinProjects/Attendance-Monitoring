@@ -42,7 +42,12 @@ export default function Attendance() {
     [year, month]
   );
 
+  const historyStartYear = 2026;
+  const historyStartMonth = 9;
+  const atHistoryStart = year === historyStartYear && month === historyStartMonth;
+
   function previousMonth() {
+    if (atHistoryStart) return;
     if (month === 1) { setYear((v) => v - 1); setMonth(12); }
     else setMonth((v) => v - 1);
   }
@@ -62,7 +67,7 @@ export default function Attendance() {
           <p className="text-xs text-slate-muted mt-1">Every date in the month, including calendar status, leave, breaks and daily work hours.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button className="rounded-lg border px-3 py-1.5" onClick={previousMonth}>‹</button>
+          <button disabled={atHistoryStart} className="rounded-lg border px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed" onClick={previousMonth}>‹</button>
           <span className="py-1.5 text-sm font-medium min-w-32 text-center">{monthLabel}</span>
           <button className="rounded-lg border px-3 py-1.5" onClick={nextMonth}>›</button>
         </div>
@@ -82,10 +87,23 @@ function AttendanceDay({ day }) {
   const calendar = day.calendar || {};
   const leave = day.leave;
   const isToday = isCurrentDate(day.date);
-  const leaveLabel = leave?.leave_type === "half_day" ? "Half-day leave" : `${capitalize(leave?.leave_type)} leave`;
-  const dayLabel = leave ? `Leave day · ${leaveLabel}` : DAY_LABELS[day.day_status] || DAY_LABELS[calendar.day_type] || "Working day";
-  const detail = calendar.name && calendar.day_type === "holiday" ? calendar.name : null;
-  const workApplicable = calendar.is_working_day && !leave;
+  const leaveLabel = leave?.leave_type === "half_day"
+    ? `Half-day leave${leave?.half_day_period ? ` · ${capitalize(leave.half_day_period)}` : ""}`
+    : leave?.leave_type ? `${capitalize(leave.leave_type)} leave` : null;
+  // An elapsed working day with no attendance is displayed as Leave. The
+  // backend creates the corresponding approved unpaid-leave record after
+  // the 4 PM cutoff; this fallback also keeps the history clear if a record
+  // is not yet present in an older database.
+  const isElapsedWorkingAbsence = calendar.is_working_day && !leave && day.work_status === "absent";
+  const dayLabel = leave
+    ? `Leave day · ${leaveLabel}`
+    : isElapsedWorkingAbsence
+      ? "Leave"
+      : DAY_LABELS[day.day_status] || DAY_LABELS[calendar.day_type] || "Working day";
+  const detail = leave?.leave_type === "half_day"
+    ? `${capitalize(leave.half_day_period || "")} half-day${leave.reason ? ` · ${leave.reason}` : ""}`
+    : calendar.name && calendar.day_type === "holiday" ? calendar.name : null;
+  const workApplicable = calendar.is_working_day && !leave && !isElapsedWorkingAbsence;
 
   return (
     <Card className={`${isToday ? "!border-blue-200 !bg-blue-50/50" : ""} !p-4`}>
@@ -104,7 +122,7 @@ function AttendanceDay({ day }) {
 
       {leave ? (
         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-sm">
-          <p className="font-medium text-amber">{leave.leave_type === "half_day" ? "Half-day leave" : `${capitalize(leave.leave_type)} leave`}</p>
+          <p className="font-medium text-amber">{leave.leave_type === "half_day" ? `Half-day leave · ${capitalize(leave.half_day_period || "")}` : `${capitalize(leave.leave_type)} leave`}</p>
           {leave.reason && <p className="text-xs text-slate-muted mt-1">{leave.reason}</p>}
           {leave.reason?.startsWith("Auto-marked unpaid leave:") && <p className="text-xs text-amber mt-1">Automatically applied after the 4:00 PM no-check-in cutoff. An administrator can correct this record.</p>}
         </div>
@@ -119,6 +137,11 @@ function AttendanceDay({ day }) {
           <WorkTarget day={day} />
           {day.breaks?.length > 0 && <BreakDetails breaks={day.breaks} />}
         </>
+      ) : isElapsedWorkingAbsence ? (
+        <div className="mt-3 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-sm">
+          <p className="font-medium text-amber">Leave</p>
+          <p className="text-xs text-slate-muted mt-1">No check-in was recorded for this working day.</p>
+        </div>
       ) : (
         <div className="mt-3 text-sm text-slate-muted">{calendar.day_type === "sunday" ? "No attendance required on Sunday." : calendar.day_type === "holiday" ? "No attendance required on this holiday." : "No attendance required on this non-working day."}</div>
       )}
