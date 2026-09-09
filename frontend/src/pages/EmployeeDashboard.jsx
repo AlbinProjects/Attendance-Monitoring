@@ -213,7 +213,7 @@ export default function EmployeeDashboard() {
     }
   }
 
-  async function handlePunch() {
+  async function handlePunch({ requestHalfDay = false } = {}) {
     if (isOtherSite || isOnDuty) {
       showToast("Check-in and check-out are not required for this work mode.", "error");
       return;
@@ -242,10 +242,25 @@ export default function EmployeeDashboard() {
         await api.post("/attendance/check-in", gpsPayload);
         showToast("Location verified. Attendance marked successfully.");
       } else {
+        // Always complete the attendance checkout first. If the employee
+        // selected half-day leave, the approval request is created only
+        // after the checkout succeeds, so a failed GPS checkout cannot leave
+        // a stray half-day request behind.
         await api.post("/attendance/check-out", gpsPayload);
-        showToast("Location verified. Checked out — have a good evening.");
+        if (requestHalfDay) {
+          try {
+            await api.post("/calendar/leave/request-half-day", null, {
+              params: { reason: "Half-day leave requested after completing at least 4 net work hours." },
+            });
+            showToast("Checked out. Half-day leave request sent for approval.");
+          } catch (halfDayErr) {
+            showToast(halfDayErr?.response?.data?.detail || "Checked out, but the half-day leave request could not be submitted.", "error");
+          }
+        } else {
+          showToast("Location verified. Checked out — have a good evening.");
+        }
       }
-      const res = await api.get("/attendance/today");
+      const res = await api.get("/attendance/today", { params: { _ts: Date.now() } });
       setToday(res.data);
     } catch (err) {
       // A slow first request can make a second click arrive after the
@@ -350,7 +365,7 @@ export default function EmployeeDashboard() {
         </Card>
       )}
 
-      {!((onDuty?.status === "approved" || onDuty?.status === "started") && !today?.check_in) && !isOtherSite && <PunchCard today={today} punching={punching} statusLabel={punchStatusLabel} onPunch={handlePunch} />}
+      {!((onDuty?.status === "approved" || onDuty?.status === "started") && !today?.check_in) && !isOtherSite && <PunchCard today={today} breakData={breakData} punching={punching} statusLabel={punchStatusLabel} onPunch={handlePunch} />}
 
       {employee?.role === "employee" && !isOtherSite && !isOnDuty && <BreakCard breakData={breakData} canStart={!!today?.check_in && !today?.check_out} onChanged={loadAll} />}
 
