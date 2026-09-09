@@ -248,6 +248,17 @@ def get_admin_attendance(
         if inactivity_flag is not None and summary["flagged"] != inactivity_flag:
             continue
 
+        # A check-in without a check-out is only an open session on the same
+        # calendar day. From the following day onward it is a missed check-out
+        # and must be visible to Admin/Super Admin without changing the stored
+        # attendance status.
+        attendance_date = date.fromisoformat(row["attendance_date"])
+        checkout_missed = bool(
+            row.get("check_in")
+            and not row.get("check_out")
+            and attendance_date < get_office_today(settings)
+        )
+
         enriched.append(
             {
                 **row,
@@ -260,6 +271,7 @@ def get_admin_attendance(
                 "total_break_seconds": break_summary["total_break_seconds"],
                 "breaks": break_summary["sessions"],
                 "inactivity_flag": summary["flagged"],
+                "checkout_missed": checkout_missed,
             }
         )
 
