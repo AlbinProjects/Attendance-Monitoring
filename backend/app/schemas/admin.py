@@ -18,7 +18,7 @@ class EmployeeCreateRequest(BaseModel):
     joining_date: Optional[date] = None
     # If omitted, a random temporary password is generated and returned
     # once in the response for the Super Admin to relay out-of-band.
-    password: Optional[str] = None
+    password: Optional[str] = Field(default=None, min_length=8, max_length=72)
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -30,6 +30,8 @@ class EmployeeUpdateRequest(BaseModel):
     joining_date: Optional[date] = None
     role: Optional[Role] = None
     is_active: Optional[bool] = None
+    # Super Admin only. Passwords are write-only and never returned.
+    password: Optional[str] = Field(default=None, min_length=8, max_length=72)
 
 
 class DashboardStats(BaseModel):
