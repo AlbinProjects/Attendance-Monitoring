@@ -14,6 +14,7 @@ export default function EmployeeForm({ initial, mode, onSubmit, submitting, canM
     role: initial?.role || "employee",
     joining_date: initial?.joining_date || "",
     is_active: initial?.is_active ?? true,
+    password: "",
   });
 
   function update(field, value) {
@@ -72,6 +73,22 @@ export default function EmployeeForm({ initial, mode, onSubmit, submitting, canM
           />
         </Field>
       </div>
+      {(!isEdit || canManageRoles) && (
+        <Field label={isEdit ? "New password (optional)" : "Password (optional)"}>
+          <input
+            type="password"
+            minLength={8}
+            maxLength={72}
+            autoComplete="new-password"
+            value={values.password}
+            onChange={(e) => update("password", e.target.value)}
+            className={inputCls}
+            placeholder={isEdit ? "Leave blank to keep current password" : "Leave blank to generate one"}
+          />
+          <p className="text-xs text-slate-muted mt-1">Minimum 8 characters. Password is never displayed or stored in the employee profile.</p>
+        </Field>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <Field label="Role">
           <select disabled={isEdit && !canManageRoles} value={values.role} onChange={(e) => update("role", e.target.value)} className={inputCls}>
