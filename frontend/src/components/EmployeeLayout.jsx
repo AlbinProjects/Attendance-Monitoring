@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import useLaptopPresence from "../hooks/useLaptopPresence";
+import PasswordChangeModal from "./PasswordChangeModal";
+import { useState } from "react";
 
 const TABS = [
   { to: "/employee/dashboard", label: "Home", icon: HomeIcon },
@@ -11,6 +13,7 @@ const TABS = [
 
 export default function EmployeeLayout() {
   const { employee, logout } = useAuth();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   useLaptopPresence(employee?.role === "employee");
 
   return (
@@ -21,14 +24,24 @@ export default function EmployeeLayout() {
             <p className="text-sm font-semibold text-ink truncate">{employee?.name}</p>
             <p className="text-xs text-slate-muted truncate">{employee?.department || employee?.employee_code}</p>
           </div>
-          <button
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              className="text-sm text-brand font-medium px-2 py-1 rounded-lg transition-colors"
+            >
+              Change password
+            </button>
+            <button
             onClick={logout}
             className="text-sm text-slate-muted hover:text-ink px-2 py-1 rounded-lg transition-colors"
-          >
-            Log out
-          </button>
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </header>
+
+      {showPasswordModal && <PasswordChangeModal onClose={() => setShowPasswordModal(false)} />}
 
       <main className="flex-1 max-w-lg w-full mx-auto px-4 py-5 pb-24">
         <Outlet />
