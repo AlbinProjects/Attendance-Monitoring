@@ -5,6 +5,8 @@ import LoadingScreen from "../../components/LoadingScreen";
 import Card from "../../components/Card";
 import StatusBadge from "../../components/StatusBadge";
 import { formatTime, formatDate, formatDuration } from "../../utils/formatters";
+import { useAuth } from "../../context/AuthContext";
+import AdminSelfAttendanceCard from "../../components/AdminSelfAttendanceCard";
 
 const DETAIL_LABELS = {
   present: "Present today",
@@ -17,6 +19,7 @@ const DETAIL_LABELS = {
 };
 
 export default function AdminDashboard() {
+  const { employee } = useAuth();
   const [stats, setStats] = useState(null);
   const [error, setError] = useState(null);
   const [selectedMetric, setSelectedMetric] = useState(null);
@@ -69,6 +72,8 @@ export default function AdminDashboard() {
           })}
         </p>
       </div>
+
+      {employee?.role === "admin" && <AdminSelfAttendanceCard />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Total employees" value={stats.total_employees} />
