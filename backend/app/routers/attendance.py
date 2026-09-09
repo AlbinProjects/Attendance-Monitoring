@@ -31,6 +31,7 @@ async def get_today(employee: dict = Depends(require_role("employee", "admin")))
     """
     settings = get_settings()
     today = attendance_service.get_office_today(settings)
+    attendance_service._ensure_auto_unpaid_leave(employee["id"], today, settings)
     row = attendance_service.get_attendance_for_date(employee["id"], today)
     if row:
         return row
@@ -79,5 +80,12 @@ async def check_out(
 
 @router.get("/history")
 async def get_history(employee: dict = Depends(require_role("employee", "admin"))):
-    """Attendance history for the calling employee."""
+    """Legacy attendance history endpoint."""
     return attendance_service.get_attendance_history(employee["id"])
+
+
+@router.get("/month")
+async def get_month(year: int, month: int, employee: dict = Depends(require_role("employee", "admin"))):
+    """Complete month grid for the calling employee, including calendar day
+    type, leave, attendance, breaks and net eight-hour workday calculation."""
+    return attendance_service.get_monthly_attendance(employee["id"], year, month, get_settings())
