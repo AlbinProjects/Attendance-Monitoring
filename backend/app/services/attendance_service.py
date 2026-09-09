@@ -132,8 +132,11 @@ def get_monthly_attendance(employee_id: str, year: int, month: int, settings: Se
     if month < 1 or month > 12:
         raise HTTPException(status_code=400, detail="Invalid month.")
 
-    start = date(year, month, 1)
+    history_start = date(2026, 9, 1)
+    start = max(date(year, month, 1), history_start)
     end = date(year, month, monthrange(year, month)[1])
+    if end < history_start:
+        return []
     client = get_service_client()
     attendance_rows = (client.table("attendance").select(
         "id,employee_id,attendance_date,check_in,check_out,status,check_in_source,check_out_source,reason,marked_by,created_at,updated_at"
@@ -176,7 +179,8 @@ def get_monthly_attendance(employee_id: str, year: int, month: int, settings: Se
 
     out = []
     target_seconds = 8 * 60 * 60
-    for day_num in range(1, monthrange(year, month)[1] + 1):
+    first_day = max(1, (start - date(year, month, 1)).days + 1)
+    for day_num in range(first_day, monthrange(year, month)[1] + 1):
         d = date(year, month, day_num)
         iso = d.isoformat()
         calendar = calendar_service.get_day_status(d)
