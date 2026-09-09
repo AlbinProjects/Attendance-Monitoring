@@ -7,7 +7,7 @@ const TYPES = [
   ["tea", "Tea Break"],
   ["lunch", "Lunch Break"],
   ["evening", "Evening Break"],
-];
+]; 
 
 const EMPTY = {
   total_break_seconds: 0,
