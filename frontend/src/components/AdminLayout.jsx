@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useState } from "react";
+import PasswordChangeModal from "./PasswordChangeModal";
 
 const NAV = [
   { to: "/admin/dashboard", label: "Dashboard" },
@@ -14,6 +16,7 @@ const NAV = [
 
 export default function AdminLayout() {
   const { employee, logout } = useAuth();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   return (
     <div className="min-h-screen md:flex">
@@ -39,9 +42,14 @@ export default function AdminLayout() {
         </nav>
         <div className="px-5 py-4 border-t border-border">
           <p className="text-xs text-slate-muted truncate">{employee?.name}</p>
-          <button onClick={logout} className="text-xs text-brand font-medium mt-1">
-            Log out
-          </button>
+          <div className="flex flex-col items-start">
+            <button onClick={() => setShowPasswordModal(true)} className="text-xs text-brand font-medium mt-1">
+              Change password
+            </button>
+            <button onClick={logout} className="text-xs text-slate-muted font-medium mt-1">
+              Log out
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -50,9 +58,14 @@ export default function AdminLayout() {
         <header className="md:hidden sticky top-0 z-30 bg-white border-b border-border">
           <div className="px-4 h-14 flex items-center justify-between">
             <p className="font-mono text-sm text-ink">Admin</p>
-            <button onClick={logout} className="text-sm text-slate-muted">
-              Log out
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowPasswordModal(true)} className="text-sm text-brand font-medium">
+                Password
+              </button>
+              <button onClick={logout} className="text-sm text-slate-muted">
+                Log out
+              </button>
+            </div>
           </div>
           <nav className="flex overflow-x-auto px-2 pb-2 gap-1 no-scrollbar">
             {NAV.map(({ to, label }) => (
@@ -70,6 +83,8 @@ export default function AdminLayout() {
             ))}
           </nav>
         </header>
+
+        {showPasswordModal && <PasswordChangeModal onClose={() => setShowPasswordModal(false)} />}
 
         <main className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-8">
           <Outlet />
