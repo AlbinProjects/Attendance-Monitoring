@@ -25,6 +25,7 @@ export default function Calendar() {
   const [request, setRequest] = useState({
     leave_date: "",
     leave_type: "paid",
+    half_day_period: "morning",
     reason: "",
   });
   const [requesting, setRequesting] = useState(false);
@@ -79,7 +80,7 @@ export default function Calendar() {
         params: request,
       });
       showToast("Leave request sent for approval.");
-      setRequest((prev) => ({ ...prev, reason: "" }));
+      setRequest((prev) => ({ ...prev, reason: "", half_day_period: "morning" }));
       await load();
     } catch (err) {
       showToast(err?.response?.data?.detail || "Couldn't submit leave request.", "error");
@@ -195,7 +196,7 @@ export default function Calendar() {
               >
                 <div className="text-xs font-medium">{Number(d.calendar_date.slice(-2))}</div>
                 <div className="text-[10px] mt-1 truncate">
-                  {leave ? `${leave.leave_type} leave` : d.is_working_day ? "Working" : (d.name || d.day_type.replaceAll("_", " "))}
+                  {leave ? (leave.leave_type === "half_day" ? "Half-day leave" : `${leave.leave_type} leave`) : d.is_working_day ? "Working" : (d.name || d.day_type.replaceAll("_", " "))}
                 </div>
               </button>
             );
@@ -211,11 +212,13 @@ export default function Calendar() {
           <select value={request.leave_type} onChange={(e) => setRequest({ ...request, leave_type: e.target.value })} className="rounded-xl border px-3 py-2.5 text-sm">
             <option value="paid">Paid leave</option>
             <option value="sick">Sick leave</option>
+            <option value="half_day">Half-day leave</option>
           </select>
+          {request.leave_type === "half_day" && <select value={request.half_day_period} onChange={(e) => setRequest({ ...request, half_day_period: e.target.value })} className="rounded-xl border px-3 py-2.5 text-sm"><option value="morning">Morning half-day</option><option value="afternoon">Afternoon half-day</option></select>}
           <input placeholder="Reason" value={request.reason} onChange={(e) => setRequest({ ...request, reason: e.target.value })} className="rounded-xl border px-3 py-2.5 text-sm" />
         </div>
         <div className="flex items-center justify-between gap-3 mt-3">
-          <p className="text-xs text-slate-muted">Your request will remain pending until an authorised Admin or Super Admin approves it.</p>
+          <p className="text-xs text-slate-muted">Half-day leave can be requested in advance. It does not consume paid/sick leave. The request remains pending until an authorised Admin or Super Admin approves it.</p>
           <button disabled={requesting} onClick={submitRequest} className="rounded-xl bg-ink text-white px-4 py-2.5 text-sm disabled:opacity-60">
             {requesting ? "Sending…" : "Ask for approval"}
           </button>
