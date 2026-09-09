@@ -173,7 +173,11 @@ export default function AdminAttendance() {
                   <td className="px-4 py-3 text-slate-muted">{r.department || "--"}</td>
                   <td className="px-4 py-3">{formatDate(r.attendance_date)}</td>
                   <td className="px-4 py-3 font-mono">{formatTime(r.check_in)}</td>
-                  <td className="px-4 py-3 font-mono">{formatTime(r.check_out)}</td>
+                  <td className="px-4 py-3 font-mono">
+                    {r.checkout_missed ? (
+                      <span className="text-danger font-semibold">Check-out missed</span>
+                    ) : formatTime(r.check_out)}
+                  </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={r.status} />
                   </td>
