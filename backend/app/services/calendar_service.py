@@ -11,8 +11,8 @@ from app.services.time_service import get_office_today
 from app.config import get_settings
 
 VALID_DAY_TYPES = {"working_day", "sunday", "holiday", "other_non_working"}
-VALID_LEAVE_TYPES = {"sick", "paid", "unpaid"}
-REQUESTABLE_LEAVE_TYPES = {"sick", "paid"}
+VALID_LEAVE_TYPES = {"sick", "paid", "unpaid", "half_day"}
+REQUESTABLE_LEAVE_TYPES = {"sick", "paid", "half_day"}
 LEAVE_STATUSES = {"pending", "approved", "rejected", "cancelled"}
 
 
@@ -167,12 +167,16 @@ def _ensure_leave_date_allowed(employee_id: str, leave_date: date) -> None:
 
 
 def request_leave(employee_id: str, leave_date: date, leave_type: str,
-                  reason: Optional[str]) -> Dict[str, Any]:
+                  reason: Optional[str], half_day_period: Optional[str] = None) -> Dict[str, Any]:
     actor = _employee_row(employee_id)
     if actor["role"] not in {"employee", "admin"}:
         raise HTTPException(status_code=403, detail="Super Admin does not need to request leave for approval.")
     if leave_type not in REQUESTABLE_LEAVE_TYPES:
-        raise HTTPException(status_code=400, detail="Employees can request only paid or sick leave.")
+        raise HTTPException(status_code=400, detail="Invalid leave type.")
+    if leave_type == "half_day" and half_day_period not in {"morning", "afternoon"}:
+        raise HTTPException(status_code=400, detail="Choose whether the half-day leave is for the morning or afternoon.")
+    if leave_type != "half_day" and half_day_period is not None:
+        raise HTTPException(status_code=400, detail="Half-day period is only valid for half-day leave.")
     if not reason or not reason.strip():
         raise HTTPException(status_code=400, detail="A reason is required for a leave request.")
     _ensure_leave_date_allowed(employee_id, leave_date)
@@ -181,20 +185,26 @@ def request_leave(employee_id: str, leave_date: date, leave_type: str,
     if existing and existing.get("status") in {"pending", "approved"}:
         raise HTTPException(status_code=409, detail="A leave request already exists for this date.")
 
-    balance = get_leave_balance(employee_id)
-    remaining = balance["standard"][leave_type]["remaining"]
-    if remaining <= 0:
-        raise HTTPException(status_code=409, detail=f"Your standard {leave_type} leave has already been used.")
+    # Half-day leave is independently approvable and does not consume the
+    # standard paid/sick balances. It can be requested in advance (today or
+    # any future working day), as well as after four hours through the
+    # checkout workflow.
+    if leave_type != "half_day":
+        balance = get_leave_balance(employee_id)
+        remaining = balance["standard"][leave_type]["remaining"]
+        if remaining <= 0:
+            raise HTTPException(status_code=409, detail=f"Your standard {leave_type} leave has already been used.")
 
     client = get_service_client()
     payload = {"employee_id": employee_id, "leave_date": leave_date.isoformat(), "leave_type": leave_type,
+               "half_day_period": half_day_period if leave_type == "half_day" else None,
                "status": "pending", "is_additional": False, "reason": reason.strip(), "granted_by": None}
     if existing:
         row = client.table("employee_leaves").update(payload).eq("id", existing["id"]).execute().data[0]
     else:
         row = client.table("employee_leaves").insert(payload).execute().data[0]
     audit_service.write_audit_log(action="LEAVE_REQUESTED", employee_id=employee_id,
-                                  new_value={k: row.get(k) for k in ("leave_date","leave_type","status","reason")},
+                                  new_value={k: row.get(k) for k in ("leave_date","leave_type","half_day_period","status","reason")},
                                   performed_by=employee_id, reason=reason.strip())
     return row
 
@@ -211,6 +221,46 @@ def _validate_approval_actor(actor_id: str, target_employee_id: str) -> str:
     return actor_role
 
 
+def request_half_day_leave(employee_id: str, reason: Optional[str] = None) -> Dict[str, Any]:
+    """Checkout-specific half-day request.
+
+    The Calendar leave request can request a half-day in advance. This
+    endpoint remains stricter because it is exposed by the checkout flow: the
+    employee must have completed at least four net hours before using the
+    shortcut to request half-day leave while checking out.
+    """
+    from datetime import datetime
+    from app.services import break_service, remote_work_service, on_duty_service, attendance_service
+
+    settings = get_settings()
+    today = get_office_today(settings)
+    if not is_working_day(today):
+        raise HTTPException(status_code=400, detail="Half-day leave cannot be requested on a company non-working day.")
+
+    attendance = attendance_service.get_attendance_for_date(employee_id, today)
+    if not attendance or not attendance.get("check_in"):
+        raise HTTPException(status_code=400, detail="You must check in before using the checkout half-day option. For an earlier request, use Calendar → Request leave → Half-day leave.")
+
+    end_dt = datetime.fromisoformat(attendance["check_out"]) if attendance.get("check_out") else get_office_now(settings)
+    check_in_dt = datetime.fromisoformat(attendance["check_in"])
+    summary = break_service.get_break_summary(attendance["id"], end_dt)
+    gross = max(0, int((end_dt - check_in_dt).total_seconds()))
+    net_seconds = max(0, gross - summary["total_break_seconds"])
+    if net_seconds < 4 * 60 * 60:
+        raise HTTPException(status_code=400, detail="You can use the checkout half-day option only after completing at least 4 net work hours.")
+    if net_seconds >= 8 * 60 * 60:
+        raise HTTPException(status_code=400, detail="You have already completed the 8-hour work target; half-day leave is not applicable.")
+
+    remote = remote_work_service.get_today(employee_id)
+    on_duty = on_duty_service.get_today(employee_id)
+    if remote and remote.get("work_mode") == "other_site":
+        raise HTTPException(status_code=400, detail="Half-day leave is not available for an Other Site work assignment.")
+    if on_duty and on_duty.get("status") in {"approved", "started", "completed"}:
+        raise HTTPException(status_code=400, detail="Half-day leave is not available for an On Duty session.")
+
+    return request_leave(employee_id, today, "half_day", reason or "Half-day leave requested after completing 4 net work hours.", "afternoon")
+
+
 def approve_leave_request(leave_id: str, approved_by: str) -> Dict[str, Any]:
     client = get_service_client()
     result = client.table("employee_leaves").select("*").eq("id", leave_id).maybe_single().execute()
@@ -223,6 +273,21 @@ def approve_leave_request(leave_id: str, approved_by: str) -> Dict[str, Any]:
     _ensure_leave_date_allowed(existing["employee_id"], date.fromisoformat(existing["leave_date"]))
     balance = get_leave_balance(existing["employee_id"])
     leave_type = existing["leave_type"]
+    if leave_type == "half_day":
+        # Half-day leave has its own approval state and does not consume the
+        # standard paid/sick leave balances. It is only created by the
+        # four-hour eligibility endpoint above.
+        row = client.table("employee_leaves").update({"status": "approved", "granted_by": approved_by}).eq("id", leave_id).execute().data[0]
+        attendance = (client.table("attendance").select("id,status,check_in,check_out")
+                      .eq("employee_id", existing["employee_id"]).eq("attendance_date", existing["leave_date"]).maybe_single().execute())
+        if attendance and attendance.data:
+            client.table("attendance").update({"status": "half_day"}).eq("id", attendance.data["id"]).execute()
+        audit_service.write_audit_log(action="LEAVE_APPROVED", employee_id=existing["employee_id"],
+                                      attendance_id=attendance.data["id"] if attendance and attendance.data else None,
+                                      old_value={"status": "pending"},
+                                      new_value={"leave_date": row.get("leave_date"), "leave_type": row.get("leave_type"), "status": row.get("status"), "granted_by": row.get("granted_by")},
+                                      performed_by=approved_by)
+        return row
     if leave_type not in REQUESTABLE_LEAVE_TYPES or balance["standard"][leave_type]["remaining"] <= 0:
         raise HTTPException(status_code=409, detail=f"No remaining standard {leave_type} leave is available for this employee.")
     row = client.table("employee_leaves").update({"status": "approved", "granted_by": approved_by}).eq("id", leave_id).execute().data[0]
@@ -256,7 +321,9 @@ def grant_leave(employee_id: str, leave_date: date, leave_type: str, is_addition
     actor_role = _actor_role(granted_by)
     _employee_row(employee_id)
     existing = get_leave_for_employee_date(employee_id, leave_date)
-    if existing and existing.get("status") == "approved":
+    auto_unpaid = bool(existing and existing.get("status") == "approved" and existing.get("leave_type") == "unpaid" and
+                       str(existing.get("reason") or "").startswith("Auto-marked unpaid leave:"))
+    if existing and existing.get("status") == "approved" and not auto_unpaid:
         raise HTTPException(status_code=409, detail="Leave already exists for this date.")
     if actor_role not in {"admin", "super_admin"}:
         raise HTTPException(status_code=403, detail="Only Admin or Super Admin can grant leave.")
@@ -274,7 +341,7 @@ def grant_leave(employee_id: str, leave_date: date, leave_type: str, is_addition
     client = get_service_client()
     payload = {"employee_id": employee_id, "leave_date": leave_date.isoformat(), "leave_type": leave_type,
                "status": "approved", "is_additional": bool(is_additional), "reason": reason, "granted_by": granted_by}
-    if existing and existing.get("status") in {"cancelled", "rejected"}:
+    if existing and (existing.get("status") in {"cancelled", "rejected"} or auto_unpaid):
         row = client.table("employee_leaves").update(payload).eq("id", existing["id"]).execute().data[0]
     elif existing:
         raise HTTPException(status_code=409, detail="A leave request already exists for this date.")
