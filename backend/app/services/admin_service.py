@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 from app.config import Settings
-from app.services import activity_service, break_service
+from app.services import activity_service, break_service, attendance_service, calendar_service
 from app.services.supabase_client import get_service_client
 from app.services.time_service import get_office_today
 
@@ -515,3 +515,152 @@ def get_admin_activity(
         }
         for r in attendance_rows
     ]
+
+
+# -----------------------------------------------------------------------
+# Monthly attendance matrix
+# -----------------------------------------------------------------------
+
+def get_monthly_attendance_matrix(settings: Settings, year: int, month: int) -> Dict[str, Any]:
+    """Return a calendar-style attendance matrix for active Employees + Admins.
+
+    Super Admins are intentionally excluded. Each cell contains one clear
+    business status for that staff member/date, while preserving useful
+    secondary information such as work mode, leave type and worked hours.
+    The authoritative daily calculations come from attendance_service so
+    leave, remote work, breaks, missed checkout and the 8-hour rule stay
+    consistent with the individual Attendance screen.
+    """
+    from calendar import monthrange
+    from datetime import date
+
+    if month < 1 or month > 12:
+        raise ValueError("Invalid month")
+
+    month_start = date(year, month, 1)
+    month_end = date(year, month, monthrange(year, month)[1])
+    history_start = date(2026, 9, 1)
+    days = [date(year, month, d) for d in range(1, monthrange(year, month)[1] + 1)]
+
+    today = get_office_today(settings)
+    staff = _get_active_attendance_staff()
+    client = get_service_client()
+    on_duty_rows = (client.table("on_duty_requests").select("employee_id,on_duty_date,purpose,status")
+                    .gte("on_duty_date", month_start.isoformat()).lte("on_duty_date", month_end.isoformat())
+                    .in_("status", ["approved", "started", "completed"]).execute().data or [])
+    on_duty_by_key = {(r.get("employee_id"), r.get("on_duty_date")): r for r in on_duty_rows}
+    rows = []
+    for person in staff:
+        daily = attendance_service.get_monthly_attendance(person["id"], year, month, settings)
+        by_date = {r["date"]: r for r in daily}
+        cells = []
+        for d in days:
+            iso = d.isoformat()
+            day = by_date.get(iso)
+            if day is None:
+                cells.append({"date": iso, "status": "before_history", "label": "Before history"})
+                continue
+
+            calendar = day.get("calendar") or {}
+            leave = day.get("leave")
+            remote = day.get("remote_work")
+            attendance = day.get("attendance")
+            work_status = day.get("work_status")
+
+            # Priority is intentional: approved leave/assigned work modes are
+            # attendance classifications in their own right and should not be
+            # hidden by a stale attendance row.
+            if leave:
+                lt = leave.get("leave_type")
+                if lt == "half_day":
+                    period = leave.get("half_day_period")
+                    status_key = "half_day_leave"
+                    label = f"Half-day leave" + (f" ({period})" if period else "")
+                    if period:
+                        label = f"Half-day leave · {period.title()}"
+                    if leave.get("is_additional"):
+                        label += " · Additional"
+                else:
+                    status_key = f"{lt}_leave"
+                    label = f"{str(lt).title()} leave"
+                cells.append({
+                    "date": iso, "status": status_key, "label": label,
+                    "leave_type": lt, "half_day_period": leave.get("half_day_period"),
+                    "reason": leave.get("reason"),
+                })
+                continue
+
+            mode = remote.get("work_mode") if remote else None
+            if mode == "other_site":
+                cells.append({
+                    "date": iso, "status": "other_site", "label": "Other Site",
+                    "work_mode": mode, "site_name": remote.get("site_name"),
+                    "purpose": remote.get("purpose"),
+                })
+                continue
+
+            # On Duty is not returned by the existing monthly attendance
+            # service, so check the day here only for a display classification.
+            # A later normal attendance row still remains visible if one exists.
+            on_duty = on_duty_by_key.get((person["id"], iso))
+            if on_duty and not attendance and mode is None:
+                cells.append({"date": iso, "status": "on_duty", "label": "On Duty", "purpose": on_duty.get("purpose")})
+                continue
+
+            if calendar.get("day_type") == "sunday":
+                cells.append({"date": iso, "status": "sunday", "label": "Sunday"})
+                continue
+            if calendar.get("day_type") == "holiday":
+                cells.append({"date": iso, "status": "holiday", "label": calendar.get("name") or "Holiday"})
+                continue
+            if not calendar.get("is_working_day"):
+                cells.append({"date": iso, "status": "other_non_working", "label": calendar.get("name") or "Non-working"})
+                continue
+
+            if not attendance or not attendance.get("check_in"):
+                if d < today:
+                    cells.append({"date": iso, "status": "missed_check_in", "label": "Missed check-in"})
+                else:
+                    cells.append({"date": iso, "status": "upcoming", "label": "—"})
+                continue
+
+            if work_status == "checkout_missed":
+                label = "Check-out missed"
+                if mode == "wfh": label = "WFH · Check-out missed"
+                cells.append({"date": iso, "status": "checkout_missed", "label": label, "work_mode": mode, "net_work_seconds": day.get("net_work_seconds")})
+                continue
+
+            short = work_status == "short_8h" or (work_status == "in_progress" and day.get("net_work_seconds", 0) < 8 * 3600 and d < today)
+            if short:
+                base = "Late" if attendance.get("status") == "late" else "Present"
+                label = f"{base} · <8h"
+                if mode == "wfh": label = f"WFH · {base} · <8h"
+                cells.append({"date": iso, "status": "not_completed_8h", "label": label, "work_mode": mode, "attendance_status": attendance.get("status"), "net_work_seconds": day.get("net_work_seconds")})
+                continue
+
+            if attendance.get("status") == "late":
+                label = "WFH · Late" if mode == "wfh" else "Late"
+                cells.append({"date": iso, "status": "late", "label": label, "work_mode": mode, "net_work_seconds": day.get("net_work_seconds")})
+            else:
+                label = "WFH · Present" if mode == "wfh" else "Present"
+                cells.append({"date": iso, "status": "present", "label": label, "work_mode": mode, "net_work_seconds": day.get("net_work_seconds")})
+
+        rows.append({
+            "employee_id": person["id"],
+            "name": person.get("name"),
+            "employee_code": person.get("employee_code"),
+            "department": person.get("department"),
+            "designation": person.get("designation"),
+            "role": person.get("role"),
+            "cells": cells,
+        })
+
+    return {
+        "year": year,
+        "month": month,
+        "month_start": month_start.isoformat(),
+        "month_end": month_end.isoformat(),
+        "history_start": history_start.isoformat(),
+        "days": [{"date": d.isoformat(), "day": d.day, "calendar": calendar_service.get_day_status(d)} for d in days],
+        "staff": rows,
+    }
