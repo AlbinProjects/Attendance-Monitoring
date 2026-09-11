@@ -7,6 +7,7 @@ import { useState } from "react";
 const TABS = [
   { to: "/employee/dashboard", label: "Home", icon: HomeIcon },
   { to: "/employee/attendance", label: "Attendance", icon: CalendarIcon },
+  { to: "/employee/monthly-attendance", label: "Monthly Attendance", icon: CalendarIcon },
   { to: "/employee/performance", label: "Performance", icon: ClipboardIcon },
   { to: "/employee/calendar", label: "Calendar", icon: CalendarIcon },
 ];
@@ -48,7 +49,7 @@ export default function EmployeeLayout() {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-border">
-        <div className="max-w-lg mx-auto grid grid-cols-4">
+        <div className="max-w-lg mx-auto grid grid-cols-5">
           {TABS.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
