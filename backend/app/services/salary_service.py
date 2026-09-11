@@ -64,7 +64,7 @@ def set_base(employee_id: str, salary: Decimal, performed_by: str) -> Dict[str, 
     client = get_service_client()
     result = (
         client.table("employees")
-        .update({"monthly_salary": _money(Decimal(salary))})
+        .update({"monthly_salary": float(_money(Decimal(salary)))})
         .eq("id", employee_id)
         .execute()
     )
@@ -266,25 +266,25 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
         "employee_id": employee_id,
         "salary_year": year,
         "salary_month": month,
-        "base_salary": _money(Decimal(salary)),
+        "base_salary": float(_money(Decimal(salary))),
         "total_days_in_month": total_days,
         "elapsed_days_considered": elapsed_days,
         "working_days": counts["working_days"],
         "holidays": counts["holidays"],
         "sundays": counts["sundays"],
         "other_non_working_days": counts["other_non_working_days"],
-        "paid_leave_days": counts["paid_leave_days"],
-        "sick_leave_days": counts["sick_leave_days"],
-        "unpaid_leave_days": counts["unpaid_leave_days"],
-        "unpaid_half_leave_days": counts["unpaid_half_leave_days"],
+        "paid_leave_days": float(counts["paid_leave_days"]),
+        "sick_leave_days": float(counts["sick_leave_days"]),
+        "unpaid_leave_days": float(counts["unpaid_leave_days"]),
+        "unpaid_half_leave_days": float(counts["unpaid_half_leave_days"]),
         "other_site_days": counts["other_site_days"],
         "on_duty_days": counts["on_duty_days"],
         "short_8h_days": counts["short_8h_days"],
-        "short_day_penalty_days": short_penalty,
-        "deduction_days": deduction_days,
-        "per_day_salary": _money(per_day),
-        "deduction_amount": deduction_amount,
-        "payable_salary": payable,
+        "short_day_penalty_days": float(short_penalty),
+        "deduction_days": float(deduction_days),
+        "per_day_salary": float(_money(per_day)),
+        "deduction_amount": float(deduction_amount),
+        "payable_salary": float(payable),
         "details": details,
         "calculated_by": performed_by,
     }
