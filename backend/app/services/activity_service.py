@@ -206,6 +206,26 @@ def get_activity_summary_for_attendance(attendance: Optional[Dict[str, Any]], se
     rather than an employee_id so admin callers can pass any employee's
     record, not just the caller's own.
     """
+    # Advanced desktop monitoring is an optional company-wide feature and is
+    # OFF by default. When it is disabled, no inactivity time or flags may be
+    # calculated anywhere (dashboard, attendance, or activity drill-downs).
+    # Keep this backend-side so the rule cannot be bypassed by calling an API
+    # directly.
+    from app.services import company_config_service
+    if not company_config_service.get_effective_config(settings).advanced_desktop_monitoring_enabled:
+        return {
+            "attendance_id": attendance.get("id") if attendance else None,
+            "checked_in": bool(attendance and attendance.get("check_in")),
+            "check_in": attendance.get("check_in") if attendance else None,
+            "check_out": attendance.get("check_out") if attendance else None,
+            "total_session_seconds": 0,
+            "counted_inactivity_seconds": 0,
+            "active_session_seconds": 0,
+            "flagged": False,
+            "periods": [],
+            "monitoring": False,
+        }
+
     # These modes intentionally have no laptop monitoring.
     from app.services import remote_work_service, on_duty_service
     employee_id = attendance.get("employee_id") if attendance else None
