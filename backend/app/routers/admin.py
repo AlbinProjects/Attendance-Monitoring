@@ -72,6 +72,21 @@ async def attendance_table(
     )
 
 
+@router.get("/attendance/monthly")
+async def monthly_attendance_matrix(
+    year: int,
+    month: int,
+    _employee: dict = Depends(require_role("admin", "super_admin")),
+):
+    """Calendar matrix for active Employees + Admins. Super Admins excluded."""
+    settings = get_settings()
+    try:
+        return admin_service.get_monthly_attendance_matrix(settings, year, month)
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.get("/salary", response_model=SalaryCalculationResponse | None)
 async def get_salary_calculation(
     employee_id: str,
