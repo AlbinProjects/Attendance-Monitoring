@@ -19,6 +19,8 @@ import AuditLogs from "./pages/admin/AuditLogs";
 import CompanySettings from "./pages/admin/CompanySettings";
 import AdminCalendar from "./pages/admin/Calendar";
 import Salary from "./pages/admin/Salary";
+import MonthlyAttendance from "./pages/MonthlyAttendance";
+import AttendanceByMonth from "./pages/admin/AttendanceByMonth";
 
 function RootRedirect() {
   const { loading, isAuthenticated, employee } = useAuth();
@@ -50,6 +52,7 @@ export default function App() {
           >
             <Route path="dashboard" element={<EmployeeDashboard />} />
             <Route path="attendance" element={<Attendance />} />
+            <Route path="monthly-attendance" element={<MonthlyAttendance />} />
             <Route path="performance" element={<Performance />} />
             <Route path="calendar" element={<Calendar />} />
           </Route>
@@ -64,6 +67,8 @@ export default function App() {
           >
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="attendance" element={<AdminAttendance />} />
+            <Route path="attendance-by-month" element={<AttendanceByMonth />} />
+            <Route path="monthly-attendance" element={<MonthlyAttendance />} />
             <Route path="performance" element={<AdminPerformance />} />
             <Route path="activity" element={<AdminActivity />} />
             <Route path="employees" element={<Employees />} />
