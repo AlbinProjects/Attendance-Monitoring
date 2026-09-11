@@ -6,6 +6,8 @@ import PasswordChangeModal from "./PasswordChangeModal";
 const NAV = [
   { to: "/admin/dashboard", label: "Dashboard" },
   { to: "/admin/attendance", label: "Attendance" },
+  { to: "/admin/attendance-by-month", label: "Attendance by Month" },
+  { to: "/admin/monthly-attendance", label: "Monthly Attendance" },
   { to: "/admin/performance", label: "Performance" },
   { to: "/admin/activity", label: "Activity" },
   { to: "/admin/employees", label: "Employees" },
@@ -18,6 +20,8 @@ const NAV = [
 export default function AdminLayout() {
   const { employee, logout } = useAuth();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const isSuperAdmin = employee?.role === "super_admin";
+  const nav = NAV.filter((item) => !(item.to === "/admin/monthly-attendance" && isSuperAdmin));
 
   return (
     <div className="min-h-screen md:flex">
@@ -27,7 +31,7 @@ export default function AdminLayout() {
           <p className="font-mono text-sm text-ink">Admin</p>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV.map(({ to, label }) => (
+          {nav.map(({ to, label }) => (
             <NavLink
               key={to}
               to={to}
@@ -69,7 +73,7 @@ export default function AdminLayout() {
             </div>
           </div>
           <nav className="flex overflow-x-auto px-2 pb-2 gap-1 no-scrollbar">
-            {NAV.map(({ to, label }) => (
+            {nav.map(({ to, label }) => (
               <NavLink
                 key={to}
                 to={to}
