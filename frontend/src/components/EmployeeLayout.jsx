@@ -55,13 +55,13 @@ export default function EmployeeLayout() {
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+                `flex h-[72px] flex-col items-center justify-start gap-1 pt-2.5 text-xs font-medium leading-4 transition-colors ${
                   isActive ? "text-brand" : "text-slate-muted"
                 }`
               }
             >
-              <Icon className="h-5 w-5" />
-              {label}
+              <Icon className="h-5 w-5 shrink-0" />
+              <span className="h-8 w-full flex items-start justify-center text-center px-0.5">{label}</span>
             </NavLink>
           ))}
         </div>
