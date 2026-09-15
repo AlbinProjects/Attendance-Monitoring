@@ -182,7 +182,7 @@ export default function AdminAttendance() {
                     ) : formatTime(r.check_out)}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={r.status} />
+                    <AttendanceStatus row={r} />
                   </td>
                   <td className="px-4 py-3 text-slate-muted">
                     {r.work_mode === "wfh" ? "Work From Home" : r.work_mode === "other_site" ? `Other Site${r.work_location ? ` · ${r.work_location}` : ""}` : "Office"}
@@ -248,4 +248,19 @@ function formatSourceLabel(source) {
   if (source === "wifi") return "WiFi";
   if (source === "admin") return "Admin";
   return source;
+}
+
+
+function AttendanceStatus({ row }) {
+  const labels = {
+    full_day_leave_short_session: "Full-day leave (0–3h)",
+    half_day_leave_short_session: "Half-day leave (>3–6h)",
+    lop_short_session: "LOP (>6–<8h)",
+    checkout_missed: "Check-out missed",
+  };
+  if (labels[row.work_status]) {
+    const tone = row.work_status === "half_day_leave_short_session" ? "bg-amber-50 text-amber border-amber-100" : "bg-danger-tint text-danger border-transparent";
+    return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tone}`}>{labels[row.work_status]}</span>;
+  }
+  return <StatusBadge status={row.status} />;
 }
