@@ -9,7 +9,7 @@ server-side; the admin UI never has to fetch everything and filter
 client-side.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from app.config import Settings
@@ -376,6 +376,19 @@ def get_admin_attendance(
             and attendance_date < get_office_today(settings)
         )
 
+        if remote and remote.get("work_mode") == "other_site":
+            row_work_status = "not_required"
+        elif checkout_missed:
+            row_work_status = "checkout_missed"
+        elif row.get("check_in") and row.get("check_out"):
+            check_in_dt = datetime.fromisoformat(row["check_in"])
+            check_out_dt = datetime.fromisoformat(row["check_out"])
+            gross_seconds = max(0, int((check_out_dt - check_in_dt).total_seconds()))
+            net_seconds = max(0, gross_seconds - int(break_summary.get("total_break_seconds") or 0))
+            row_work_status = attendance_service.classify_work_session(net_seconds)
+        else:
+            row_work_status = "in_progress" if row.get("check_in") else "not_checked_in"
+
         enriched.append(
             {
                 **row,
@@ -393,7 +406,7 @@ def get_admin_attendance(
                 "inactivity_flag": summary["flagged"],
                 "checkout_missed": checkout_missed,
                 "target_work_seconds": 0 if remote and remote.get("work_mode") == "other_site" else 8 * 3600,
-                "work_status": "not_required" if remote and remote.get("work_mode") == "other_site" else None,
+                "work_status": row_work_status,
             }
         )
         if remote:
@@ -640,12 +653,14 @@ def get_monthly_attendance_matrix(settings: Settings, year: int, month: int) -> 
                 cells.append({"date": iso, "status": "checkout_missed", "label": label, "work_mode": mode, "net_work_seconds": day.get("net_work_seconds")})
                 continue
 
-            short = work_status == "short_8h" or (work_status == "in_progress" and day.get("net_work_seconds", 0) < 8 * 3600 and d < today)
-            if short:
-                base = "Late" if attendance.get("status") == "late" else "Present"
-                label = f"{base} · <8h"
-                if mode == "wfh": label = f"WFH · {base} · <8h"
-                cells.append({"date": iso, "status": "not_completed_8h", "label": label, "work_mode": mode, "attendance_status": attendance.get("status"), "net_work_seconds": day.get("net_work_seconds")})
+            if work_status == "full_day_leave_short_session":
+                cells.append({"date": iso, "status": "full_day_leave_short_session", "label": "Full-day leave (0–3h)", "work_mode": mode, "net_work_seconds": day.get("net_work_seconds")})
+                continue
+            if work_status == "half_day_leave_short_session":
+                cells.append({"date": iso, "status": "half_day_leave_short_session", "label": "Half-day leave (>3–6h)", "work_mode": mode, "net_work_seconds": day.get("net_work_seconds")})
+                continue
+            if work_status == "lop_short_session":
+                cells.append({"date": iso, "status": "lop_short_session", "label": "LOP (>6–<8h)", "work_mode": mode, "net_work_seconds": day.get("net_work_seconds")})
                 continue
 
             if attendance.get("status") == "late":
