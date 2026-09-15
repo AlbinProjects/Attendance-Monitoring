@@ -174,7 +174,7 @@ function Statement({ data, selected }) {
           <Line label="Missed attendance penalty" value={`${days(data.missed_event_penalty_days)} day`} />
           <Line label="Full-day leave from 0–3h sessions" value={`${days(data.short_session_full_day_days)} day`} />
           <Line label="Half-day leave from >3–6h sessions" value={`${days(data.short_session_half_day_days)} day`} />
-          <Line label="LOP days (>6–<8h)" value={data.lop_days} />
+          <Line label="LOP days (>6–&lt;8h)" value={data.lop_days} />
           <Line label="Days below 8 hours (LOP)" value={data.short_8h_days} />
           <Line label="LOP threshold penalty" value={`${days(data.short_day_penalty_days)} day`} />
           <Line label="Per-day salary" value={money(data.per_day_salary)} />
