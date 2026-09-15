@@ -152,8 +152,17 @@ function AttendanceDay({ day }) {
   // the 4 PM cutoff; this fallback also keeps the history clear if a record
   // is not yet present in an older database.
   const isElapsedWorkingAbsence = calendar.is_working_day && !leave && day.work_status === "absent";
+  const shortSessionLabel = day.work_status === "full_day_leave_short_session"
+    ? "Full-day leave · worked 0–3h"
+    : day.work_status === "half_day_leave_short_session"
+      ? "Half-day leave · worked >3–6h"
+      : day.work_status === "lop_short_session"
+        ? "LOP · worked >6–<8h"
+        : null;
   const dayLabel = leave
     ? `Leave day · ${leaveLabel}`
+    : shortSessionLabel
+    ? shortSessionLabel
     : remote?.work_mode === "other_site"
       ? "Work From Other Site"
       : remote?.work_mode === "wfh"
@@ -163,7 +172,9 @@ function AttendanceDay({ day }) {
       : DAY_LABELS[day.day_status] || DAY_LABELS[calendar.day_type] || "Working day";
   const detail = leave?.leave_type === "half_day"
     ? `${capitalize(leave.half_day_period || "")} half-day${leave.reason ? ` · ${leave.reason}` : ""}`
-    : calendar.name && calendar.day_type === "holiday" ? calendar.name : null;
+    : shortSessionLabel
+      ? `Net work: ${formatDuration(day.net_work_seconds || 0)}`
+      : calendar.name && calendar.day_type === "holiday" ? calendar.name : null;
   const workApplicable = calendar.is_working_day && !leave && !isElapsedWorkingAbsence && remote?.work_mode !== "other_site";
 
   return (
@@ -256,6 +267,9 @@ function WorkTarget({ day }) {
   let message = "";
   let cls = "text-slate-muted";
   if (day.work_status === "completed_8h") { message = "8-hour target completed"; cls = "text-brand-dark"; }
+  else if (day.work_status === "full_day_leave_short_session") { message = "Full-day leave: worked less than 3 hours"; cls = "text-danger"; }
+  else if (day.work_status === "half_day_leave_short_session") { message = "Half-day leave: worked above 3 to 6 hours"; cls = "text-amber"; }
+  else if (day.work_status === "lop_short_session") { message = "LOP: worked above 6 to less than 8 hours"; cls = "text-danger"; }
   else if (day.work_status === "short_8h") { message = `Short by ${formatDuration(target - actual)}`; cls = "text-danger"; }
   else if (day.work_status === "in_progress") { message = `${formatDuration(Math.max(0, target - actual))} remaining`; cls = "text-amber"; }
   else if (day.work_status === "checkout_missed") { message = "⚠ Check-out missed"; cls = "text-danger"; }
@@ -277,6 +291,7 @@ function WorkTarget({ day }) {
       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-border">
         <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percent}%` }} />
       </div>
+      <p className="mt-2 text-[11px] text-slate-muted">0–3h = full-day leave · >3–6h = half-day leave · >6–<8h = LOP · 8h+ = full day worked.</p>
     </div>
   );
 }
