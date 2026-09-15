@@ -3,8 +3,8 @@
 Salary deductions are intentionally transparent and calendar-day based:
 - full approved unpaid leave = 1 deduction day
 - approved half-day leave = 0.5 deduction day
-- if more than 3 completed/elapsed working days in the month are below the
-  8-hour target, add exactly 0.5 deduction day
+- every 5 missed check-in/check-out events = 0.5 deduction day (combined)
+- every 3 eligible working days below the 8-hour target = 0.5 deduction day
 - Other Site and On Duty are exempt from the 8-hour short-day rule
 - Sundays/holidays/other non-working days are not short-work days
 - the salary divisor is the total calendar days in the month, including
@@ -163,6 +163,8 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
         "other_site_days": 0,
         "on_duty_days": 0,
         "short_8h_days": 0,
+        "missed_check_in_days": 0,
+        "missed_check_out_days": 0,
     }
     details: List[Dict[str, Any]] = []
 
@@ -229,6 +231,29 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
 
         counts["working_days"] += 1
         attendance = item.get("attendance") or {}
+
+        # Only elapsed days can be a missed check-in/check-out event. Today
+        # remains actionable and is never penalized while the day is open.
+        if d < today:
+            if not attendance.get("check_in"):
+                counts["missed_check_in_days"] += 1
+                details.append({
+                    "date": iso,
+                    "type": "missed_check_in",
+                    "deduction_days": 0,
+                    "reason": "No attendance check-in recorded for an elapsed working day.",
+                })
+                continue
+            if not attendance.get("check_out"):
+                counts["missed_check_out_days"] += 1
+                details.append({
+                    "date": iso,
+                    "type": "missed_check_out",
+                    "deduction_days": 0,
+                    "reason": "Check-in exists but no check-out was recorded for an elapsed working day.",
+                })
+                continue
+
         # Today is not penalized while the work session is still running.
         # A checked-out today session, however, is complete and can be short.
         if d == today and not attendance.get("check_out"):
@@ -245,21 +270,34 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
                 "reason": "Completed/elapsed working day below 8 hours; not marked as half-day or exempt work mode.",
             })
 
-    short_penalty = Decimal("0.5") if counts["short_8h_days"] > 3 else Decimal("0")
-    deduction_days = counts["unpaid_leave_days"] + counts["unpaid_half_leave_days"] + short_penalty
+    missed_events = counts["missed_check_in_days"] + counts["missed_check_out_days"]
+    missed_event_penalty = (Decimal(missed_events // 5) * Decimal("0.5"))
+    short_penalty = (Decimal(counts["short_8h_days"] // 3) * Decimal("0.5"))
+    deduction_days = (counts["unpaid_leave_days"] + counts["unpaid_half_leave_days"] +
+                      missed_event_penalty + short_penalty)
     per_day = Decimal(salary) / Decimal(total_days)
     deduction_amount = _money(per_day * deduction_days)
     payable = _money(max(Decimal("0"), Decimal(salary) - deduction_amount))
 
-    # Add a summary entry for the threshold-based half-day penalty so the
-    # administrator can see exactly why it was applied.
+    # Add summary entries for threshold-based penalties so the administrator
+    # can see how the reductions scale as the counts increase.
+    if missed_event_penalty:
+        details.append({
+            "date": None,
+            "type": "missed_attendance_threshold_penalty",
+            "deduction_days": float(missed_event_penalty),
+            "missed_check_in_days": counts["missed_check_in_days"],
+            "missed_check_out_days": counts["missed_check_out_days"],
+            "missed_attendance_events": missed_events,
+            "reason": f"Every 5 combined missed check-in/check-out events = 0.5 deduction day; {missed_events} events produced {missed_event_penalty} deduction days.",
+        })
     if short_penalty:
         details.append({
             "date": None,
             "type": "short_day_threshold_penalty",
-            "deduction_days": 0.5,
+            "deduction_days": float(short_penalty),
             "short_8h_days": counts["short_8h_days"],
-            "reason": "More than 3 working days in the month were below 8 hours; 1 unpaid half-day applied.",
+            "reason": f"Every 3 eligible working days below 8 hours = 0.5 deduction day; {counts['short_8h_days']} short days produced {short_penalty} deduction days.",
         })
 
     payload = {
@@ -280,6 +318,10 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
         "other_site_days": counts["other_site_days"],
         "on_duty_days": counts["on_duty_days"],
         "short_8h_days": counts["short_8h_days"],
+        "missed_check_in_days": counts["missed_check_in_days"],
+        "missed_check_out_days": counts["missed_check_out_days"],
+        "missed_attendance_events": missed_events,
+        "missed_event_penalty_days": float(missed_event_penalty),
         "short_day_penalty_days": float(short_penalty),
         "deduction_days": float(deduction_days),
         "per_day_salary": float(_money(per_day)),
