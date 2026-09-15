@@ -36,18 +36,19 @@ def ping(employee_id: str, settings: Settings) -> None:
 
 def get_presence(employee_id: str) -> Optional[Dict[str, Any]]:
     client = get_service_client()
+    # Do not use maybe_single() here. Some deployed PostgREST client versions
+    # can return None when no row exists, which used to turn a normal
+    # "no laptop presence yet" state into a 500 error. A one-row list query
+    # always gives us a predictable response shape.
     result = (
         client.table("laptop_presence")
         .select("*")
         .eq("employee_id", employee_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
-    # A newly created employee may not have a presence row yet.
-    # Some PostgREST client versions can return None from maybe_single().execute()
-    # when no row exists, so treat that exactly like an absent row instead of
-    # raising AttributeError and breaking the check-in endpoint.
-    return result.data if result is not None else None
+    rows = result.data if result is not None else []
+    return rows[0] if rows else None
 
 
 def has_recent_presence(employee_id: str, freshness_minutes: int, settings: Settings) -> bool:
