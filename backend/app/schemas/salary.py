@@ -34,6 +34,10 @@ class SalaryCalculationResponse(BaseModel):
     other_site_days: int
     on_duty_days: int
     short_8h_days: int
+    missed_check_in_days: int
+    missed_check_out_days: int
+    missed_attendance_events: int
+    missed_event_penalty_days: Decimal
     short_day_penalty_days: Decimal
     deduction_days: Decimal
     per_day_salary: Decimal
