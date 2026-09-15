@@ -43,6 +43,10 @@ def get_presence(employee_id: str) -> Optional[Dict[str, Any]]:
         .maybe_single()
         .execute()
     )
+    # A newly created employee may not have a presence row yet.
+    # Some PostgREST client versions can return None from maybe_single().execute()
+    # when no row exists, so treat that exactly like an absent row instead of
+    # raising AttributeError and breaking the check-in endpoint.
     return result.data if result is not None else None
 
 
