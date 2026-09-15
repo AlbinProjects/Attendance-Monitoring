@@ -78,6 +78,24 @@ def determine_attendance_status(check_in_dt: datetime, settings: Settings) -> st
     return "late" if check_in_dt > threshold_dt else "present"
 
 
+def classify_work_session(net_work_seconds: int | None) -> str:
+    """Classify a completed net-work session using the business attendance rules.
+
+    0-3h: full-day leave; >3h-6h: half-day leave; >6h-<8h: LOP; >=8h:
+    full day worked. The stated 0-3h band takes the 3-hour boundary.
+    """
+    if net_work_seconds is None:
+        return "not_applicable"
+    seconds = max(0, int(net_work_seconds))
+    if seconds <= 3 * 3600:
+        return "full_day_leave_short_session"
+    if seconds <= 6 * 3600:
+        return "half_day_leave_short_session"
+    if seconds < 8 * 3600:
+        return "lop_short_session"
+    return "completed_8h"
+
+
 def get_attendance_for_date(employee_id: str, attendance_date: date) -> Optional[Dict[str, Any]]:
     client = get_service_client()
     result = (
@@ -250,7 +268,7 @@ def get_monthly_attendance(employee_id: str, year: int, month: int, settings: Se
                 if work_status == "checkout_missed":
                     net_work_seconds = min(net_work_seconds, target_seconds)
                 if work_status == "completed":
-                    work_status = "completed_8h" if net_work_seconds >= target_seconds else "short_8h"
+                    work_status = classify_work_session(net_work_seconds)
             elif d < today:
                 work_status = "absent"
             elif d == today:
