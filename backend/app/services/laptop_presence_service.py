@@ -46,7 +46,7 @@ def get_presence(employee_id: str) -> Optional[Dict[str, Any]]:
         .eq("employee_id", employee_id)
         .limit(1)
         .execute()
-    )
+    ) 
     rows = result.data if result is not None else []
     return rows[0] if rows else None
 
