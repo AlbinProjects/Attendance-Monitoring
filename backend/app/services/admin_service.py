@@ -135,9 +135,15 @@ def get_dashboard_stats(settings: Settings) -> Dict[str, Any]:
         if (not e.get("joining_date") or e["joining_date"] <= yesterday.isoformat())
         and e["id"] not in yesterday_full_leave_ids
     ]
-    missing_performance_count = sum(
-        1 for e in eligible_for_yesterday if e["id"] not in submitted_yesterday_ids
-    )
+    # Performance is not required on Sundays/holidays/other non-working days.
+    # Keep the dashboard metric consistent with the employee missing-performance
+    # rules: if yesterday is non-working, there are no missing updates.
+    if calendar_service.is_working_day(yesterday):
+        missing_performance_count = sum(
+            1 for e in eligible_for_yesterday if e["id"] not in submitted_yesterday_ids
+        )
+    else:
+        missing_performance_count = 0
 
     # Laptop inactivity is an employee-only monitoring metric.
     inactivity_flags_count = 0
@@ -244,6 +250,10 @@ def get_dashboard_details(settings: Settings, metric: str) -> Dict[str, Any]:
         )
         submitted_ids = {r["employee_id"] for r in performance_rows if r.get("submitted_at")}
         rows = []
+        # Yesterday's missing-performance list is empty on company
+        # non-working days (Sunday/holiday/etc.).
+        if not calendar_service.is_working_day(yesterday):
+            return {"metric": metric, "date": yesterday.isoformat(), "rows": rows}
         for employee in active_employees:
             joining_date = employee.get("joining_date")
             if joining_date and joining_date > yesterday.isoformat():
