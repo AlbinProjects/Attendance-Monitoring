@@ -291,8 +291,7 @@ function WorkTarget({ day }) {
       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-border">
         <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percent}%` }} />
       </div>
-      <p className="mt-2 text-[11px] text-slate-muted">0–3h = full-day leave · >3–6h = half-day leave · >6–&lt;8h = LOP · 8h+ = full day worked.</p>
-    </div>
+      <p className="mt-2 text-[11px] text-slate-muted">0–3h = full-day leave · &gt;3–6h = half-day leave · &gt;6–&lt;8h = LOP · 8h+ = full day worked.</p>    </div>
   );
 }
 
