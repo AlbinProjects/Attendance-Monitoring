@@ -12,7 +12,8 @@ function cellClass(status) {
   if (status === "late") return "bg-amber-tint text-amber border-transparent";
   if (status === "wfh") return "bg-blue-50 text-blue-700 border-blue-100";
   if (status === "other_site" || status === "on_duty") return "bg-blue-50 text-blue-700 border-blue-100";
-  if (status === "missed_check_in" || status === "checkout_missed" || status === "not_completed_8h") return "bg-danger-tint text-danger border-transparent";
+  if (status === "full_day_leave_short_session" || status === "half_day_leave_short_session") return "bg-amber-50 text-amber border-amber-100";
+  if (status === "lop_short_session" || status === "missed_check_in" || status === "checkout_missed" || status === "not_completed_8h") return "bg-danger-tint text-danger border-transparent";
   if (status === "holiday") return "bg-red-50 text-red-700 border-red-100";
   if (status === "sunday" || status === "other_non_working" || status === "upcoming" || status === "before_history") return "bg-surface text-slate-muted border-border";
   return "bg-white text-slate-muted border-border";
@@ -20,7 +21,7 @@ function cellClass(status) {
 function shortLabel(cell) {
   const map = {
     present: "Present", late: "Late", missed_check_in: "Missed check-in", checkout_missed: "Check-out missed",
-    not_completed_8h: "<8h", sunday: "Sunday", holiday: "Holiday", other_non_working: "Non-working",
+    not_completed_8h: "<8h", full_day_leave_short_session: "Full-day leave", half_day_leave_short_session: "Half-day leave", lop_short_session: "LOP", sunday: "Sunday", holiday: "Holiday", other_non_working: "Non-working",
     other_site: "Other Site", on_duty: "On Duty", wfh: "WFH", upcoming: "—", before_history: "—",
     paid_leave: "Paid leave", sick_leave: "Sick leave", unpaid_leave: "Unpaid leave", half_day_leave: "Half-day",
   };
