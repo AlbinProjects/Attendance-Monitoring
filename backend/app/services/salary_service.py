@@ -163,6 +163,9 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
         "other_site_days": 0,
         "on_duty_days": 0,
         "short_8h_days": 0,
+        "short_session_full_day_days": Decimal("0"),
+        "short_session_half_day_days": Decimal("0"),
+        "lop_days": 0,
         "missed_check_in_days": 0,
         "missed_check_out_days": 0,
     }
@@ -260,21 +263,39 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
             continue
 
         net = item.get("net_work_seconds")
-        if net is None or int(net or 0) < 8 * 3600:
+        if net is None:
+            continue
+        seconds = int(net or 0)
+        hours = round(seconds / 3600, 2)
+        if seconds <= 3 * 3600:
+            counts["short_session_full_day_days"] += Decimal("1")
+            details.append({
+                "date": iso, "type": "full_day_leave_short_session", "deduction_days": 1,
+                "worked_hours": hours,
+                "reason": "Net worked time was 0 to 3 hours; classified as full-day leave for salary purposes.",
+            })
+        elif seconds <= 6 * 3600:
+            counts["short_session_half_day_days"] += Decimal("0.5")
+            details.append({
+                "date": iso, "type": "half_day_leave_short_session", "deduction_days": 0.5,
+                "worked_hours": hours,
+                "reason": "Net worked time was above 3 to 6 hours; classified as half-day leave for salary purposes.",
+            })
+        elif seconds < 8 * 3600:
+            counts["lop_days"] += 1
             counts["short_8h_days"] += 1
             details.append({
-                "date": iso,
-                "type": "short_8h_day",
-                "deduction_days": 0,
-                "worked_hours": round((int(net or 0) / 3600), 2),
-                "reason": "Completed/elapsed working day below 8 hours; not marked as half-day or exempt work mode.",
+                "date": iso, "type": "lop_short_session", "deduction_days": 0,
+                "worked_hours": hours,
+                "reason": "Net worked time was above 6 to below 8 hours; classified as LOP. Every 4 LOP days produce 0.5 deduction day.",
             })
 
     missed_events = counts["missed_check_in_days"] + counts["missed_check_out_days"]
     missed_event_penalty = (Decimal(missed_events // 5) * Decimal("0.5"))
-    short_penalty = (Decimal(counts["short_8h_days"] // 3) * Decimal("0.5"))
+    lop_penalty = (Decimal(counts["lop_days"] // 4) * Decimal("0.5"))
+    short_session_penalty = counts["short_session_full_day_days"] + counts["short_session_half_day_days"]
     deduction_days = (counts["unpaid_leave_days"] + counts["unpaid_half_leave_days"] +
-                      missed_event_penalty + short_penalty)
+                      short_session_penalty + missed_event_penalty + lop_penalty)
     per_day = Decimal(salary) / Decimal(total_days)
     deduction_amount = _money(per_day * deduction_days)
     payable = _money(max(Decimal("0"), Decimal(salary) - deduction_amount))
@@ -291,13 +312,11 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
             "missed_attendance_events": missed_events,
             "reason": f"Every 5 combined missed check-in/check-out events = 0.5 deduction day; {missed_events} events produced {missed_event_penalty} deduction days.",
         })
-    if short_penalty:
+    if lop_penalty:
         details.append({
-            "date": None,
-            "type": "short_day_threshold_penalty",
-            "deduction_days": float(short_penalty),
-            "short_8h_days": counts["short_8h_days"],
-            "reason": f"Every 3 eligible working days below 8 hours = 0.5 deduction day; {counts['short_8h_days']} short days produced {short_penalty} deduction days.",
+            "date": None, "type": "lop_threshold_penalty",
+            "deduction_days": float(lop_penalty), "lop_days": counts["lop_days"],
+            "reason": f"Every 4 LOP days (6 to below 8 hours) = 0.5 deduction day; {counts['lop_days']} LOP days produced {lop_penalty} deduction days.",
         })
 
     payload = {
@@ -318,11 +337,14 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
         "other_site_days": counts["other_site_days"],
         "on_duty_days": counts["on_duty_days"],
         "short_8h_days": counts["short_8h_days"],
+        "short_session_full_day_days": float(counts["short_session_full_day_days"]),
+        "short_session_half_day_days": float(counts["short_session_half_day_days"]),
+        "lop_days": counts["lop_days"],
         "missed_check_in_days": counts["missed_check_in_days"],
         "missed_check_out_days": counts["missed_check_out_days"],
         "missed_attendance_events": missed_events,
         "missed_event_penalty_days": float(missed_event_penalty),
-        "short_day_penalty_days": float(short_penalty),
+        "short_day_penalty_days": float(lop_penalty),
         "deduction_days": float(deduction_days),
         "per_day_salary": float(_money(per_day)),
         "deduction_amount": float(deduction_amount),
