@@ -172,8 +172,11 @@ function Statement({ data, selected }) {
           <Line label="Missed check-outs" value={data.missed_check_out_days} />
           <Line label="Combined missed attendance events" value={data.missed_attendance_events} />
           <Line label="Missed attendance penalty" value={`${days(data.missed_event_penalty_days)} day`} />
-          <Line label="Days below 8 hours" value={data.short_8h_days} />
-          <Line label="Short-day penalty" value={`${days(data.short_day_penalty_days)} day`} />
+          <Line label="Full-day leave from 0–3h sessions" value={`${days(data.short_session_full_day_days)} day`} />
+          <Line label="Half-day leave from >3–6h sessions" value={`${days(data.short_session_half_day_days)} day`} />
+          <Line label="LOP days (>6–<8h)" value={data.lop_days} />
+          <Line label="Days below 8 hours (LOP)" value={data.short_8h_days} />
+          <Line label="LOP threshold penalty" value={`${days(data.short_day_penalty_days)} day`} />
           <Line label="Per-day salary" value={money(data.per_day_salary)} />
           <Line label="Total deduction days" value={days(data.deduction_days)} />
           <Line label="Elapsed days considered" value={data.elapsed_days_considered} />
@@ -187,7 +190,7 @@ function Statement({ data, selected }) {
             {data.details.map((item, index) => (
               <div key={`${item.type}-${item.date || "summary"}-${index}`} className="rounded-xl border border-border px-3 py-3 text-sm flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <div>
-                  <p className="font-medium text-ink">{item.type === "unpaid_leave" ? "Unpaid leave" : item.type === "unpaid_half_leave" ? "Unpaid half leave" : item.type === "short_8h_day" ? "Below 8-hour day" : item.type === "missed_check_in" ? "Missed check-in" : item.type === "missed_check_out" ? "Missed check-out" : item.type === "missed_attendance_threshold_penalty" ? "Missed attendance threshold penalty" : "8-hour short-day threshold penalty"}{item.date ? ` · ${item.date}` : ""}</p>
+                  <p className="font-medium text-ink">{item.type === "unpaid_leave" ? "Unpaid leave" : item.type === "unpaid_half_leave" ? "Unpaid half leave" : item.type === "short_8h_day" ? "Below 8-hour day" : item.type === "full_day_leave_short_session" ? "Full-day leave (0–3h)" : item.type === "half_day_leave_short_session" ? "Half-day leave (>3–6h)" : item.type === "lop_short_session" ? "LOP (>6–<8h)" : item.type === "missed_check_in" ? "Missed check-in" : item.type === "missed_check_out" ? "Missed check-out" : item.type === "missed_attendance_threshold_penalty" ? "Missed attendance threshold penalty" : "8-hour short-day threshold penalty"}{item.date ? ` · ${item.date}` : ""}</p>
                   <p className="text-xs text-slate-muted mt-0.5">{item.reason || ""}{item.half_day_period ? ` · ${item.half_day_period}` : ""}{item.worked_hours != null ? ` · Worked ${item.worked_hours}h` : ""}</p>
                 </div>
                 <span className="font-mono font-semibold text-danger">{days(item.deduction_days)} deduction day{Number(item.deduction_days) === 1 ? "" : "s"}</span>
@@ -198,7 +201,7 @@ function Statement({ data, selected }) {
       </Card>
 
       <Card className="bg-surface">
-        <p className="text-xs text-slate-muted"><strong>Rule:</strong> Paid/sick leave = no salary deduction. Unpaid leave = 1 day. Approved half-day leave = 0.5 day. Every 5 combined missed check-in/check-out events = 0.5 day; every 3 eligible working days below 8 hours = 0.5 day. These penalties scale in groups (6 short days = 1 full day; 10 missed attendance events = 1 full day). Work From Other Site and On Duty are exempt from the 8-hour rule.</p>
+        <p className="text-xs text-slate-muted"><strong>Rule:</strong> Paid/sick leave = no salary deduction. Unpaid leave = 1 day. Approved half-day leave = 0.5 day. A completed session below 3h = full-day leave (1 day); 3 to below 6h = half-day leave (0.5 day); 6 to below 8h = LOP. Every 4 LOP days = 0.5 deduction day. Every 5 combined missed check-in/check-out events = 0.5 deduction day. Work From Other Site and On Duty are exempt from the 8-hour rule.</p>
       </Card>
     </div>
   );
