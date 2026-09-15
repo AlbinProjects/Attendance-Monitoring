@@ -168,6 +168,10 @@ function Statement({ data, selected }) {
           <Line label="Unpaid half leave" value={`${days(data.unpaid_half_leave_days)} day`} />
           <Line label="Work From Other Site" value={`${data.other_site_days} day${data.other_site_days === 1 ? "" : "s"}`} />
           <Line label="On Duty" value={`${data.on_duty_days} day${data.on_duty_days === 1 ? "" : "s"}`} />
+          <Line label="Missed check-ins" value={data.missed_check_in_days} />
+          <Line label="Missed check-outs" value={data.missed_check_out_days} />
+          <Line label="Combined missed attendance events" value={data.missed_attendance_events} />
+          <Line label="Missed attendance penalty" value={`${days(data.missed_event_penalty_days)} day`} />
           <Line label="Days below 8 hours" value={data.short_8h_days} />
           <Line label="Short-day penalty" value={`${days(data.short_day_penalty_days)} day`} />
           <Line label="Per-day salary" value={money(data.per_day_salary)} />
@@ -183,7 +187,7 @@ function Statement({ data, selected }) {
             {data.details.map((item, index) => (
               <div key={`${item.type}-${item.date || "summary"}-${index}`} className="rounded-xl border border-border px-3 py-3 text-sm flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <div>
-                  <p className="font-medium text-ink">{item.type === "unpaid_leave" ? "Unpaid leave" : item.type === "unpaid_half_leave" ? "Unpaid half leave" : item.type === "short_8h_day" ? "Below 8-hour day" : "8-hour short-day threshold penalty"}{item.date ? ` · ${item.date}` : ""}</p>
+                  <p className="font-medium text-ink">{item.type === "unpaid_leave" ? "Unpaid leave" : item.type === "unpaid_half_leave" ? "Unpaid half leave" : item.type === "short_8h_day" ? "Below 8-hour day" : item.type === "missed_check_in" ? "Missed check-in" : item.type === "missed_check_out" ? "Missed check-out" : item.type === "missed_attendance_threshold_penalty" ? "Missed attendance threshold penalty" : "8-hour short-day threshold penalty"}{item.date ? ` · ${item.date}` : ""}</p>
                   <p className="text-xs text-slate-muted mt-0.5">{item.reason || ""}{item.half_day_period ? ` · ${item.half_day_period}` : ""}{item.worked_hours != null ? ` · Worked ${item.worked_hours}h` : ""}</p>
                 </div>
                 <span className="font-mono font-semibold text-danger">{days(item.deduction_days)} deduction day{Number(item.deduction_days) === 1 ? "" : "s"}</span>
@@ -194,7 +198,7 @@ function Statement({ data, selected }) {
       </Card>
 
       <Card className="bg-surface">
-        <p className="text-xs text-slate-muted"><strong>Rule:</strong> Unpaid leave = 1 day, approved half-day leave = 0.5 day. If more than 3 eligible working days in the month are below 8 hours, one additional unpaid half-day (0.5 day) is applied. Work From Other Site and On Duty are exempt from the 8-hour rule.</p>
+        <p className="text-xs text-slate-muted"><strong>Rule:</strong> Paid/sick leave = no salary deduction. Unpaid leave = 1 day. Approved half-day leave = 0.5 day. Every 5 combined missed check-in/check-out events = 0.5 day; every 3 eligible working days below 8 hours = 0.5 day. These penalties scale in groups (6 short days = 1 full day; 10 missed attendance events = 1 full day). Work From Other Site and On Duty are exempt from the 8-hour rule.</p>
       </Card>
     </div>
   );
