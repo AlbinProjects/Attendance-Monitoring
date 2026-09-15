@@ -43,7 +43,7 @@ def get_presence(employee_id: str) -> Optional[Dict[str, Any]]:
         .maybe_single()
         .execute()
     )
-    return result.data
+    return result.data if result is not None else None
 
 
 def has_recent_presence(employee_id: str, freshness_minutes: int, settings: Settings) -> bool:
