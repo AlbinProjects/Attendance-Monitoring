@@ -32,6 +32,9 @@ function dayStatus(day) {
   if (day.calendar?.day_type === "holiday") return day.calendar?.name || "Holiday";
   if (!day.calendar?.is_working_day) return day.calendar?.name || "Non-working";
   if (day.work_status === "checkout_missed") return "Check-out missed";
+  if (day.work_status === "full_day_leave_short_session") return "Full-day leave (0–3h)";
+  if (day.work_status === "half_day_leave_short_session") return "Half-day leave (>3–6h)";
+  if (day.work_status === "lop_short_session") return "LOP (>6–<8h)";
   if (day.work_status === "short_8h") return "Not completed 8h";
   if (day.attendance?.status === "late") return "Late";
   if (day.attendance) return "Present";
@@ -46,7 +49,8 @@ function statusTone(day) {
   if (s.includes("other site") || s.includes("wfh")) return "bg-blue-50 border-blue-100 text-blue-700";
   if (s === "present") return "bg-brand-tint border-transparent text-brand-dark";
   if (s === "late") return "bg-amber-tint border-transparent text-amber";
-  if (s.includes("missed") || s.includes("not completed")) return "bg-danger-tint border-transparent text-danger";
+  if (s.includes("full-day leave") || s.includes("half-day leave")) return "bg-amber-50 border-amber-100 text-amber";
+  if (s.includes("lop") || s.includes("missed") || s.includes("not completed")) return "bg-danger-tint border-transparent text-danger";
   if (s === "sunday" || s.includes("holiday") || s.includes("non-working")) return "bg-surface border-border text-slate-muted";
   return "bg-white border-border text-slate-muted";
 }
