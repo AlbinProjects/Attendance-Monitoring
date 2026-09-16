@@ -38,7 +38,7 @@ function dayStatus(day) {
   if (day.work_status === "short_8h") return "Not completed 8h";
   if (day.attendance?.status === "late") return "Late";
   if (day.attendance) return "Present";
-  if (day.work_status === "absent") return "Missed check-in";
+  if (day.work_status === "absent") return "Unpaid leave · Missed check-in";
   if (day.work_status === "not_checked_in") return "Not checked in";
   if (day.work_status === "upcoming") return "Upcoming";
   return "—";
