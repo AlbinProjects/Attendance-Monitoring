@@ -474,25 +474,69 @@ def get_admin_performance(
     status: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     client = get_service_client()
-    query = client.table("performance_updates").select("*")
-    if on_date:
-        query = query.eq("work_date", on_date.isoformat())
-    if employee_id:
-        query = query.eq("employee_id", employee_id)
-    if status:
-        query = query.eq("status", status)
-    rows = query.execute().data or []
+
+    # Fetch the complete performance history first so the "last 5" rule is
+    # independent of the admin's current date/employee/status filters.
+    all_rows = client.table("performance_updates").select("*").execute().data or []
+    submitted_by_staff = {}
+    for row in all_rows:
+        if row.get("submitted_at"):
+            submitted_by_staff.setdefault(row["employee_id"], []).append(row)
+
+    visible_ids = set()
+    for staff_id, staff_rows in submitted_by_staff.items():
+        staff_rows.sort(
+            key=lambda r: (r.get("work_date") or "", r.get("submitted_at") or ""),
+            reverse=True,
+        )
+        visible_ids.update(r.get("id") for r in staff_rows[:5] if r.get("id"))
 
     employees = {e["id"]: e for e in _get_all_employees()}
 
+    # Admin performance is for active Employees + Admins. Super Admins do
+    # not participate in performance submission and are excluded here.
+    allowed_staff_ids = {
+        e["id"] for e in employees.values()
+        if e.get("is_active") and e.get("role") in {"employee", "admin"}
+    }
+
     enriched = []
-    for row in rows:
+    for row in all_rows:
+        if row.get("employee_id") not in allowed_staff_ids:
+            continue
+        if on_date and row.get("work_date") != on_date.isoformat():
+            continue
+        if employee_id and row.get("employee_id") != employee_id:
+            continue
+        if status and row.get("status") != status:
+            continue
+
         emp = employees.get(row["employee_id"], {})
         if department and emp.get("department") != department:
             continue
+
+        content_visible = row.get("id") in visible_ids
+        content_fields = (
+            {
+                "performance_text": row.get("performance_text"),
+                "completed_tasks": row.get("completed_tasks"),
+                "pending_tasks": row.get("pending_tasks"),
+                "blockers": row.get("blockers"),
+                "additional_notes": row.get("additional_notes"),
+            }
+            if content_visible else {}
+        )
         enriched.append(
             {
-                **row,
+                **{
+                    k: v for k, v in row.items()
+                    if k not in {
+                        "performance_text", "completed_tasks", "pending_tasks",
+                        "blockers", "additional_notes"
+                    }
+                },
+                **content_fields,
+                "content_visible": content_visible,
                 "employee_name": emp.get("name"),
                 "employee_code": emp.get("employee_code"),
                 "department": emp.get("department"),
