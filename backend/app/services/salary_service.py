@@ -239,12 +239,17 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
         # remains actionable and is never penalized while the day is open.
         if d < today:
             if not attendance.get("check_in"):
+                # A missed check-in on an elapsed working day is treated as
+                # one full unpaid leave day. Do not also feed it into the
+                # separate missed-attendance threshold, which would double
+                # penalize the same event.
                 counts["missed_check_in_days"] += 1
+                counts["unpaid_leave_days"] += Decimal("1")
                 details.append({
                     "date": iso,
-                    "type": "missed_check_in",
-                    "deduction_days": 0,
-                    "reason": "No attendance check-in recorded for an elapsed working day.",
+                    "type": "unpaid_leave_missed_check_in",
+                    "deduction_days": 1,
+                    "reason": "No attendance check-in was recorded for an elapsed working day; treated as full-day unpaid leave.",
                 })
                 continue
             if not attendance.get("check_out"):
@@ -290,7 +295,10 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
                 "reason": "Net worked time was above 6 to below 8 hours; classified as LOP. Every 4 LOP days produce 0.5 deduction day.",
             })
 
-    missed_events = counts["missed_check_in_days"] + counts["missed_check_out_days"]
+    # Missed check-ins are already full unpaid-leave deductions. Only missed
+    # check-outs remain in the separate 5-event threshold so the same missed
+    # check-in is never deducted twice.
+    missed_events = counts["missed_check_out_days"]
     missed_event_penalty = (Decimal(missed_events // 5) * Decimal("0.5"))
     lop_penalty = (Decimal(counts["lop_days"] // 4) * Decimal("0.5"))
     short_session_penalty = counts["short_session_full_day_days"] + counts["short_session_half_day_days"]
@@ -310,7 +318,7 @@ def calculate(employee_id: str, year: int, month: int, salary: Decimal | None,
             "missed_check_in_days": counts["missed_check_in_days"],
             "missed_check_out_days": counts["missed_check_out_days"],
             "missed_attendance_events": missed_events,
-            "reason": f"Every 5 combined missed check-in/check-out events = 0.5 deduction day; {missed_events} events produced {missed_event_penalty} deduction days.",
+            "reason": f"Every 5 missed check-out events = 0.5 deduction day; {missed_events} events produced {missed_event_penalty} deduction days. Missed check-ins are already treated as full unpaid leave.",
         })
     if lop_penalty:
         details.append({
