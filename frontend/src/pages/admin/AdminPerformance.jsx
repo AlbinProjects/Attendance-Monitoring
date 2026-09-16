@@ -14,6 +14,17 @@ const STATUS_OPTIONS = [
   { value: "backdated", label: "Backdated" },
 ];
 
+
+function Detail({ label, value }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-[11px] text-slate-muted">{label}</p>
+      <p className="text-xs text-ink whitespace-pre-wrap mt-0.5">{value}</p>
+    </div>
+  );
+}
+
 export default function AdminPerformance() {
   const [employees, setEmployees] = useState([]);
   const [rows, setRows] = useState(null);
@@ -29,7 +40,9 @@ export default function AdminPerformance() {
     return [...set].map((d) => ({ value: d, label: d }));
   }, [employees]);
   const employeeOptions = useMemo(
-    () => employees.map((e) => ({ value: e.id, label: e.name })),
+    () => employees
+      .filter((e) => e.is_active && (e.role === "employee" || e.role === "admin"))
+      .map((e) => ({ value: e.id, label: e.name })),
     [employees]
   );
 
@@ -87,18 +100,19 @@ export default function AdminPerformance() {
               <th className="px-4 py-3 font-medium">Work date</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Submitted at</th>
+              <th className="px-4 py-3 font-medium">Details</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-muted">
                   Loading…
                 </td>
               </tr>
             ) : rows?.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-muted">
                   No performance records match these filters.
                 </td>
               </tr>
@@ -113,6 +127,19 @@ export default function AdminPerformance() {
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-muted">
                     {r.submitted_at ? formatTime(r.submitted_at) : "--"}
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    {r.content_visible ? (
+                      <div className="space-y-2 min-w-[280px]">
+                        <Detail label="What was worked on" value={r.performance_text} />
+                        <Detail label="Completed tasks" value={r.completed_tasks} />
+                        <Detail label="Pending tasks" value={r.pending_tasks} />
+                        <Detail label="Blockers" value={r.blockers} />
+                        <Detail label="Notes" value={r.additional_notes} />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-muted">Submitted</span>
+                    )}
                   </td>
                 </tr>
               ))
