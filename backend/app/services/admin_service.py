@@ -642,7 +642,12 @@ def get_monthly_attendance_matrix(settings: Settings, year: int, month: int) -> 
 
             if not attendance or not attendance.get("check_in"):
                 if d < today:
-                    cells.append({"date": iso, "status": "missed_check_in", "label": "Missed check-in"})
+                    cells.append({
+                        "date": iso,
+                        "status": "unpaid_leave",
+                        "label": "Unpaid leave · Missed check-in",
+                        "reason": "No attendance check-in recorded for an elapsed working day.",
+                    })
                 else:
                     cells.append({"date": iso, "status": "upcoming", "label": "—"})
                 continue
