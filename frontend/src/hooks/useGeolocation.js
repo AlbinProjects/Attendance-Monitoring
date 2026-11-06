@@ -1,9 +1,9 @@
 
 import { useCallback, useState } from "react";
 
-const MAX_WAIT_MS = 20_000;
-const TARGET_ACCURACY_METERS = 30;
-const MIN_WAIT_MS = 3_000;
+const MAX_WAIT_MS = 8000;
+const TARGET_ACCURACY_METERS = 50;
+const MIN_WAIT_MS = 1000;
 
 export default function useGeolocation() {
   const [loading, setLoading] = useState(false);
@@ -15,7 +15,7 @@ export default function useGeolocation() {
 
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        const message = "Location services aren't available on this device.";
+        const message = "Geolocation is not supported.";
         setError(message);
         setLoading(false);
         reject(new Error(message));
@@ -33,7 +33,6 @@ export default function useGeolocation() {
         if (watchId !== null) {
           navigator.geolocation.clearWatch(watchId);
         }
-
         if (timerId !== null) {
           clearTimeout(timerId);
         }
@@ -60,14 +59,12 @@ export default function useGeolocation() {
         cleanup();
         setLoading(false);
         setError(message);
-
         reject(new Error(message));
       };
 
       const onSuccess = (position) => {
         if (finished) return;
 
-        // Keep only the most accurate reading.
         if (
           !bestPosition ||
           position.coords.accuracy < bestPosition.coords.accuracy
@@ -77,7 +74,6 @@ export default function useGeolocation() {
 
         const elapsed = Date.now() - startTime;
 
-        // Stop early if accuracy is good enough.
         if (
           bestPosition.coords.accuracy <= TARGET_ACCURACY_METERS &&
           elapsed >= MIN_WAIT_MS
@@ -88,7 +84,7 @@ export default function useGeolocation() {
 
       const onError = (geoError) => {
         if (geoError.code === 1) {
-          fail("Location permission is required for attendance.");
+          fail("Please allow location permission.");
         }
       };
 
@@ -99,30 +95,23 @@ export default function useGeolocation() {
           {
             enableHighAccuracy: true,
             timeout: MAX_WAIT_MS,
-            maximumAge: 0,
+            maximumAge: 2000,
           }
         );
 
-        // After 20 seconds, return the best available reading.
         timerId = setTimeout(() => {
           if (bestPosition) {
             finish(bestPosition);
           } else {
-            fail(
-              "Unable to get your location. Please enable GPS and try again."
-            );
+            fail("Unable to get location. Please try again.");
           }
         }, MAX_WAIT_MS);
 
       } catch (err) {
-        fail("Couldn't access location services. Please try again.");
+        fail("Location service unavailable.");
       }
     });
   }, []);
 
-  return {
-    getLocation,
-    loading,
-    error,
-  };
+  return { getLocation, loading, error };
 }
